@@ -1,0 +1,40 @@
+name: CI
+
+on:
+  push:
+    branches: [ main, master ]
+  pull_request:
+    branches: [ main, master ]
+
+jobs:
+  build-and-test:
+    name: Build and Test (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+
+    steps:
+    - uses: actions/checkout@v3
+
+    - name: Install dependencies (Ubuntu)
+      if: startsWith(matrix.os, 'ubuntu')
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y clang-tidy clang-format
+
+    - name: Check code formatting (clang-format)
+      if: startsWith(matrix.os, 'ubuntu')
+      run: |
+        find include src tests -name "*.cpp" -o -name "*.hpp" | xargs clang-format --dry-run --Werror
+
+    - name: Configure CMake
+      run: cmake -S . -B build -DBUILD_TESTING=ON -DENABLE_CLANG_TIDY=ON
+
+    - name: Build
+      run: cmake --build build --config Release
+
+    - name: Run Tests
+      run: |
+        cd build
+        ctest --output-on-failure
