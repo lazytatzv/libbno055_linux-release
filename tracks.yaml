@@ -1,0 +1,17 @@
+tracks:
+  humble:
+    actions:
+      - bloom-export-upstream :{vcs_local_uri} :{release_tag} :{ros_distro}
+      - git-bloom-import-upstream :{write_target} :{release_tag} :{ros_distro}
+      - git-bloom-generate -y rosdebian --prefix release :{ros_distro} :{selected_track}
+      - git-bloom-generate -y rosdebian --prefix pristine :{ros_distro} :{selected_track}
+    devel_branch: null
+    last_release: null
+    last_version: null
+    name: humble
+    patches: null
+    release_tag: v:{version}
+    repository: libbno055_linux
+    ros_distro: humble
+    vcs_type: git
+    vcs_uri: git@github.com:lazytatzv/bno055lib.git
