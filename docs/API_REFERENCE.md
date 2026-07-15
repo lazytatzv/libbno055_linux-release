@@ -9,7 +9,6 @@
   - [Configuration](#configuration)
   - [Sensor Data (Throwing APIs)](#sensor-data-throwing-apis)
   - [Sensor Data (Exception-free / noexcept APIs)](#sensor-data-exception-free--noexcept-apis)
-  - [Sensor Data (Beginner-Friendly / OrDefault APIs)](#sensor-data-beginner-friendly--ordefault-apis)
   - [Diagnostics & Calibration](#diagnostics--calibration)
   - [Power Management](#power-management)
   - [Logging](#logging)
@@ -182,18 +181,6 @@ These companion APIs perform the exact same register queries and conversions but
     *   *Returns*: `std::optional<T>`. Contains the requested struct on success; `std::nullopt` on communication failure.
     *   *Description*: Safety-hardened read path that increments I2C diagnostic counters upon failure without generating CPU exceptions.
 
-#### Sensor Data (Beginner-Friendly / OrDefault APIs)
-
-These functions return sensor readings directly. They never throw exceptions and never return optionals. If an I2C communication failure occurs, they automatically return the last cached valid value (or zero/identity values on startup).
-
-*   **Vector3 getAccelerometerOrDefault() noexcept**
-*   **Vector3 getMagnetometerOrDefault() noexcept**
-*   **Vector3 getGyroscopeOrDefault() noexcept**
-*   **Vector3 getEulerAnglesOrDefault() noexcept**
-*   **Vector3 getLinearAccelerationOrDefault() noexcept**
-*   **Vector3 getGravityOrDefault() noexcept**
-*   **Quaternion getQuaternionOrDefault() noexcept**
-*   **int8_t getTemperatureOrDefault() noexcept**
     *   *Parameters*: None.
     *   *Returns*: The requested struct directly (`Vector3`, `Quaternion`, or `int8_t`). On temporary bus drops, returns the last cached valid frame (or zero/identity).
 
