@@ -12,7 +12,7 @@ def generate_launch_description():
     node_type_arg = DeclareLaunchArgument(
         'node_type',
         default_value='standard',
-        description='Type of BNO055 node to launch. Options: [standard, perf, lifecycle]'
+        description='Type of BNO055 node to launch. Options: [standard, lifecycle]'
     )
 
     # Resolve default parameters file path
@@ -41,18 +41,6 @@ def generate_launch_description():
         )
     )
 
-    # 2. High-Performance Zero-Copy Node Configuration
-    perf_node = Node(
-        package='libbno055_linux',
-        executable='bno055_perf_publisher_node',
-        name='bno055_perf_publisher_node',
-        parameters=[params_file],
-        output='screen',
-        condition=IfCondition(
-            PythonExpression(["'", node_type, "' == 'perf'"])
-        )
-    )
-
     # 3. Lifecycle Managed Node Configuration
     lifecycle_node = LifecycleNode(
         package='libbno055_linux',
@@ -70,6 +58,5 @@ def generate_launch_description():
         node_type_arg,
         params_file_arg,
         standard_node,
-        perf_node,
         lifecycle_node
     ])

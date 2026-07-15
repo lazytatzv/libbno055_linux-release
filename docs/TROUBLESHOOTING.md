@@ -61,7 +61,7 @@ imu.begin(bno055lib::OpMode::IMUPlus);
 **Error**: High CPU/Memory overhead still present; pointers are not being passed directly.
 **Cause**: For ROS 2 to optimize message passing via zero-copy, the publishing node and the subscribing node must:
 1. Be loaded into the **same component container** (single process).
-2. Utilize `std::unique_ptr` and `std::move()` for publishing (which `bno055_perf_publisher_node` does).
+2. Utilize `std::unique_ptr` and `std::move()` for publishing (which `bno055_publisher_node` does by default).
 3. Both have `use_intra_process_comms` option enabled.
 **Solution**:
 When creating your pipeline, compose the BNO055 component and your subscriber component inside a single container executable (using `rclcpp_components`) and set `use_intra_process_comms` to `True` in the launch parameters.

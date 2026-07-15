@@ -21,6 +21,27 @@
     qos_reliability: "best_effort"
     qos_history_depth: 10
 
+    # ---------------------------------------------------------
+    # Advanced Hardware Configuration
+    # ---------------------------------------------------------
+
+    # Sensor Fusion / Operation Mode
+    # Options: ndof, imu_plus, compass, m4g, amg, acc_gyro, mag_gyro, acc_mag, gyro_only, mag_only, acc_only
+    # Note: "imu_plus" (6-axis fusion) is highly recommended for indoor robots (avoids magnetic interference).
+    #       "ndof" (9-axis fusion) provides absolute heading using the magnetometer.
+    operation_mode: "imu_plus"
+
+    # Axis Remapping (Orientation of the chip on your robot)
+    # Options: p0, p1, p2, p3, p4, p5, p6, p7
+    # Default is p1. If the sensor is mounted upside down or rotated, change this.
+    axis_map_config: "p1"
+    axis_map_sign: "p1"
+
+    # External 32.768kHz Crystal Oscillator
+    # Setting to true provides highly accurate and stable timing for the sensor fusion algorithms.
+    use_external_crystal: true
+
+    # ---------------------------------------------------------
     # Calibration Autoloading
     # Absolute path to a generated BNO055 calibration binary file (e.g. "bno055_calib.bin")
     # If left empty (""), no calibration offsets will be uploaded at startup.
@@ -32,3 +53,5 @@
     orientation_covariance: [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
     angular_velocity_covariance: [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
     linear_acceleration_covariance: [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
+    magnetic_field_covariance: [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
+    temperature_variance: 0.0

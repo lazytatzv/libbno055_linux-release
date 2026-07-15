@@ -24,8 +24,8 @@ int main(int argc, char* argv[]) {
     // Register signal handler for clean exit
     std::signal(SIGINT, signalHandler);
 
-    std::cout << "Initializing BNO055 IMU on " << device << "..." << std::endl;
-    bno055lib::BNO055 imu(0x28, device);
+    std::cout << "Initializing BNO055 IMU on " << device << "..." << "\n";
+    bno055lib::BNO055 imu(static_cast<uint8_t>(0x28), device);
 
     // Set custom logger to capture internal connection warnings/errors
     imu.setLogger([](bno055lib::LogLevel level, std::string_view message) {
@@ -44,26 +44,26 @@ int main(int argc, char* argv[]) {
                 label = "[ERR]";
                 break;
         }
-        std::cerr << label << " " << message << std::endl;
+        std::cerr << label << " " << message << "\n";
     });
 
     // Start in NDOF (9-DoF sensor fusion) mode
     if (!imu.begin(bno055lib::OpMode::NDOF)) {
-        std::cerr << "Initialization failed! Check hardware connections or I2C permissions." << std::endl;
+        std::cerr << "Initialization failed! Check hardware connections or I2C permissions." << "\n";
         return 1;
     }
 
     // Optional: Use external crystal for better accuracy
     imu.setExtCrystalUse(true);
 
-    std::cout << "IMU initialized. Reading data at 20Hz (Ctrl+C to exit)..." << std::endl;
+    std::cout << "IMU initialized. Reading data at 20Hz (Ctrl+C to exit)..." << "\n";
     std::cout << std::fixed << std::setprecision(3);
 
     auto next_loop = std::chrono::steady_clock::now();
     uint32_t loop_count = 0;
 
     while (keep_running) {
-        next_loop += std::chrono::milliseconds(50);  // 20Hz
+        next_loop += std::chrono::milliseconds(static_cast<int>(50));  // 20Hz
 
         // Read orientation (Quaternion) and angular velocity (Gyro) using noexcept APIs
         auto quat = imu.getQuaternionNoexcept();
@@ -85,15 +85,15 @@ int main(int argc, char* argv[]) {
             std::cout << "\n[DIAG] Calib: SYS=" << (int)calib.sys << " G=" << (int)calib.gyro
                       << " A=" << (int)calib.accel << " M=" << (int)calib.mag
                       << " | Bus Stats: RxErr=" << diag.read_failures << " TxErr=" << diag.write_failures
-                      << " Reconnects=" << diag.reconnect_attempts << std::endl;
+                      << " Reconnects=" << diag.reconnect_attempts << "\n";
         }
 
         std::this_thread::sleep_until(next_loop);
     }
 
-    std::cout << "\nShutting down IMU..." << std::endl;
+    std::cout << "\nShutting down IMU..." << "\n";
     imu.enterSuspendMode();  // Power down the sensor to save energy
-    std::cout << "IMU suspended. Exited cleanly." << std::endl;
+    std::cout << "IMU suspended. Exited cleanly." << "\n";
 
     return 0;
 }
