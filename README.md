@@ -1,3 +1,26 @@
+## libbno055_linux (jazzy) - 1.2.0-2
+
+The packages in the `libbno055_linux` repository were released into the `jazzy` distro by running `/tmp/bloom_env/bin/bloom-release --rosdistro jazzy --track jazzy libbno055_linux` on `Wed, 15 Jul 2026 16:17:28 -0000`
+
+The `libbno055_linux` package was released.
+
+Version of package(s) in repository `libbno055_linux`:
+
+- upstream repository: https://github.com/lazytatzv/libbno055-linux.git
+- release repository: unknown
+- rosdistro version: `null`
+- old version: `1.2.0-1`
+- new version: `1.2.0-2`
+
+Versions of tools used:
+
+- bloom version: `0.14.3`
+- catkin_pkg version: `1.1.0`
+- rosdep version: `0.26.0`
+- rosdistro version: `1.0.1`
+- vcstools version: `0.1.42`
+
+
 ## libbno055_linux (jazzy) - 1.2.0-1
 
 The packages in the `libbno055_linux` repository were released into the `jazzy` distro by running `/tmp/bloom_env/bin/bloom-release --rosdistro jazzy --track jazzy libbno055_linux` on `Wed, 15 Jul 2026 16:15:38 -0000`
