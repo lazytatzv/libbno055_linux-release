@@ -43,26 +43,28 @@ TEST(BNO055Test, CalibrationStatusDefault) {
 #endif
 }
 
-TEST(BNO055Test, OrDefaultGettersAndEulerConversion) {
+TEST(BNO055Test, NoexceptGettersAndEulerConversion) {
 #ifndef __linux__
     bno055lib::BNO055 imu(0x28, "/dev/i2c-mock");
     ASSERT_TRUE(imu.begin(bno055lib::OpMode::NDOF));
 
-    // Check OrDefault values in Mock mode
-    auto accel = imu.getAccelerometerOrDefault();
-    EXPECT_NEAR(accel.x, 0.0, 1e-4);
-    EXPECT_NEAR(accel.y, 0.0, 1e-4);
-    EXPECT_NEAR(accel.z, 0.0, 1e-4);
+    // Check Noexcept values in Mock mode
+    auto accel_opt = imu.getAccelerometerNoexcept();
+    ASSERT_TRUE(accel_opt.has_value());
+    EXPECT_NEAR(accel_opt->x, 0.0, 1e-4);
+    EXPECT_NEAR(accel_opt->y, 0.0, 1e-4);
+    EXPECT_NEAR(accel_opt->z, 0.0, 1e-4);
 
-    auto quat = imu.getQuaternionOrDefault();
-    EXPECT_NEAR(quat.w, 1.0, 1e-4);
-    EXPECT_NEAR(quat.x, 0.0, 1e-4);
-    EXPECT_NEAR(quat.y, 0.0, 1e-4);
-    EXPECT_NEAR(quat.z, 0.0, 1e-4);
+    auto quat_opt = imu.getQuaternionNoexcept();
+    ASSERT_TRUE(quat_opt.has_value());
+    EXPECT_NEAR(quat_opt->w, 1.0, 1e-4);
+    EXPECT_NEAR(quat_opt->x, 0.0, 1e-4);
+    EXPECT_NEAR(quat_opt->y, 0.0, 1e-4);
+    EXPECT_NEAR(quat_opt->z, 0.0, 1e-4);
 
     // Verify Quaternion-to-Euler conversion utility
     // Identity quaternion should result in Roll=0, Pitch=0, Yaw=0
-    auto euler = bno055lib::toEulerDegrees(quat);
+    auto euler = bno055lib::toEulerDegrees(*quat_opt);
     EXPECT_NEAR(euler.x, 0.0, 1e-4);  // Roll
     EXPECT_NEAR(euler.y, 0.0, 1e-4);  // Pitch
     EXPECT_NEAR(euler.z, 0.0, 1e-4);  // Yaw

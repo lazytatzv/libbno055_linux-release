@@ -1,6 +1,6 @@
 {
   "name": "libbno055-linux",
-  "version": "1.0.0",
+  "version": "1.2.0",
   "description": "A robust, thread-safe C++17 library for the BNO055 sensor over I2C on Linux.",
   "homepage": "https://github.com/lazytatzv/libbno055-linux",
   "license": "MIT",
