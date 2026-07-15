@@ -20,6 +20,14 @@ namespace bno055lib {
 
 namespace {
 
+inline int16_t read16_le(const uint8_t* buf) noexcept {
+    return static_cast<int16_t>(buf[0] | (buf[1] << 8));
+}
+
+inline bno055lib::Vector3 parseVector3(const uint8_t* buffer, double scale) noexcept {
+    return bno055lib::Vector3{read16_le(buffer) * scale, read16_le(buffer + 2) * scale, read16_le(buffer + 4) * scale};
+}
+
 // BNO055 Constants
 constexpr uint8_t BNO055_ID = 0xA0;
 
@@ -280,7 +288,7 @@ public:
     }
 
     bool writeLen_raw(uint8_t reg, const uint8_t* buffer, uint8_t len) {
-        if (i2c_fd < 0) return false;
+        if (i2c_fd < 0 || len > 31) return false;
 #ifdef __linux__
         uint8_t write_buf[32];  // Stack allocation instead of vector
         write_buf[0] = reg;
@@ -351,6 +359,7 @@ public:
     }
 
     bool writeLen(uint8_t reg, const uint8_t* buffer, uint8_t len, int retries = 3) {
+        if (len > 31) return false;
         std::lock_guard<std::mutex> lock(mutex_);
         uint8_t write_buf[32];  // Stack allocation instead of vector
         write_buf[0] = reg;
@@ -620,12 +629,8 @@ std::optional<Vector3> BNO055::getAccelerometerNoexcept() noexcept {
     if (!impl_->readLen(ACCEL_DATA_X_LSB, buffer, 6)) {
         return std::nullopt;
     }
-    int16_t x = static_cast<int16_t>(buffer[0] | (buffer[1] << 8));
-    int16_t y = static_cast<int16_t>(buffer[2] | (buffer[3] << 8));
-    int16_t z = static_cast<int16_t>(buffer[4] | (buffer[5] << 8));
-
     // 1 m/s^2 = 100 LSB
-    return Vector3{x / 100.0, y / 100.0, z / 100.0};
+    return parseVector3(buffer, 1.0 / 100.0);
 }
 
 Vector3 BNO055::getMagnetometer() {
@@ -641,12 +646,8 @@ std::optional<Vector3> BNO055::getMagnetometerNoexcept() noexcept {
     if (!impl_->readLen(MAG_DATA_X_LSB, buffer, 6)) {
         return std::nullopt;
     }
-    int16_t x = static_cast<int16_t>(buffer[0] | (buffer[1] << 8));
-    int16_t y = static_cast<int16_t>(buffer[2] | (buffer[3] << 8));
-    int16_t z = static_cast<int16_t>(buffer[4] | (buffer[5] << 8));
-
     // 1 uT = 16 LSB
-    return Vector3{x / 16.0, y / 16.0, z / 16.0};
+    return parseVector3(buffer, 1.0 / 16.0);
 }
 
 Vector3 BNO055::getGyroscope() {
@@ -662,13 +663,9 @@ std::optional<Vector3> BNO055::getGyroscopeNoexcept() noexcept {
     if (!impl_->readLen(GYRO_DATA_X_LSB, buffer, 6)) {
         return std::nullopt;
     }
-    int16_t x = static_cast<int16_t>(buffer[0] | (buffer[1] << 8));
-    int16_t y = static_cast<int16_t>(buffer[2] | (buffer[3] << 8));
-    int16_t z = static_cast<int16_t>(buffer[4] | (buffer[5] << 8));
-
     // 1 dps = 16 LSB. Convert to rad/s (dps * M_PI / 180.0)
     constexpr double scale = (1.0 / 16.0) * (M_PI / 180.0);
-    return Vector3{x * scale, y * scale, z * scale};
+    return parseVector3(buffer, scale);
 }
 
 Vector3 BNO055::getEulerAngles() {
@@ -684,14 +681,10 @@ std::optional<Vector3> BNO055::getEulerAnglesNoexcept() noexcept {
     if (!impl_->readLen(EULER_H_LSB, buffer, 6)) {
         return std::nullopt;
     }
-    int16_t h = static_cast<int16_t>(buffer[0] | (buffer[1] << 8));
-    int16_t r = static_cast<int16_t>(buffer[2] | (buffer[3] << 8));
-    int16_t p = static_cast<int16_t>(buffer[4] | (buffer[5] << 8));
-
     // 1 degree = 16 LSB. Convert to rad (deg * M_PI / 180.0)
     constexpr double scale = (1.0 / 16.0) * (M_PI / 180.0);
-    // h: yaw, r: roll, p: pitch
-    return Vector3{r * scale, p * scale, h * scale};
+    // buffer order: h(yaw), r(roll), p(pitch)
+    return Vector3{read16_le(buffer + 2) * scale, read16_le(buffer + 4) * scale, read16_le(buffer) * scale};
 }
 
 Vector3 BNO055::getLinearAcceleration() {
@@ -707,12 +700,8 @@ std::optional<Vector3> BNO055::getLinearAccelerationNoexcept() noexcept {
     if (!impl_->readLen(LINEAR_ACCEL_DATA_X_LSB, buffer, 6)) {
         return std::nullopt;
     }
-    int16_t x = static_cast<int16_t>(buffer[0] | (buffer[1] << 8));
-    int16_t y = static_cast<int16_t>(buffer[2] | (buffer[3] << 8));
-    int16_t z = static_cast<int16_t>(buffer[4] | (buffer[5] << 8));
-
     // 1 m/s^2 = 100 LSB
-    return Vector3{x / 100.0, y / 100.0, z / 100.0};
+    return parseVector3(buffer, 1.0 / 100.0);
 }
 
 Vector3 BNO055::getGravity() {
@@ -728,12 +717,8 @@ std::optional<Vector3> BNO055::getGravityNoexcept() noexcept {
     if (!impl_->readLen(GRAVITY_DATA_X_LSB, buffer, 6)) {
         return std::nullopt;
     }
-    int16_t x = static_cast<int16_t>(buffer[0] | (buffer[1] << 8));
-    int16_t y = static_cast<int16_t>(buffer[2] | (buffer[3] << 8));
-    int16_t z = static_cast<int16_t>(buffer[4] | (buffer[5] << 8));
-
     // 1 m/s^2 = 100 LSB
-    return Vector3{x / 100.0, y / 100.0, z / 100.0};
+    return parseVector3(buffer, 1.0 / 100.0);
 }
 
 Quaternion BNO055::getQuaternion() {
@@ -749,14 +734,10 @@ std::optional<Quaternion> BNO055::getQuaternionNoexcept() noexcept {
     if (!impl_->readLen(QUATERNION_DATA_W_LSB, buffer, 8)) {
         return std::nullopt;
     }
-    int16_t w = static_cast<int16_t>(buffer[0] | (buffer[1] << 8));
-    int16_t x = static_cast<int16_t>(buffer[2] | (buffer[3] << 8));
-    int16_t y = static_cast<int16_t>(buffer[4] | (buffer[5] << 8));
-    int16_t z = static_cast<int16_t>(buffer[6] | (buffer[7] << 8));
-
     // 1 = 16384 LSB (scale factor 2^14)
     constexpr double scale = 1.0 / 16384.0;
-    return Quaternion{w * scale, x * scale, y * scale, z * scale};
+    return Quaternion{read16_le(buffer) * scale, read16_le(buffer + 2) * scale, read16_le(buffer + 4) * scale,
+                      read16_le(buffer + 6) * scale};
 }
 
 int8_t BNO055::getTemperature() {

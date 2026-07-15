@@ -1,7 +1,7 @@
-Format: Bloom subset of https://www.debian.org/doc/packaging-manuals/copyright-format/1.0/
-Upstream-Name: libbno055_linux
+Format: https://www.debian.org/doc/packaging-manuals/copyright-format/1.0/
+Upstream-Name: libbno055-linux
+Source: https://github.com/lazytatzv/libbno055-linux
 
-Files: See file headers in repository for details
-Copyright: See package copyright in source code for details
+Files: *
+Copyright: 2024 lazytatzv
 License: MIT
- See repository for full license text

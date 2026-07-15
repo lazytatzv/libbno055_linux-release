@@ -5,6 +5,23 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.2.0] - 2026-07-15
+
+### Added
+- Complete Debian packaging support (CPack and `debian/` directory) for standalone PPA release without ROS dependencies.
+- Zero-copy intra-process communication enabled by default for ROS 2 nodes.
+
+### Changed
+- Refactored core library to enforce deterministic, `noexcept` execution natively (removed `*OrDefault` APIs in favor of `std::optional`-returning `*Noexcept` APIs).
+- Unified standard and high-performance ROS 2 nodes into a single, highly optimized node.
+- Re-written documentation to focus strictly on factual, technical features rather than buzzwords.
+
+
+## [1.1.1] - 2026-07-10
+
+### Changed
+- Updated maintainer email to GitHub no-reply address in `package.xml`.
+
 ## [1.1.0] - 2026-07-10
 
 ### Added

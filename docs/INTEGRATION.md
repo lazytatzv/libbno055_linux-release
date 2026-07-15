@@ -1,6 +1,6 @@
 # Advanced ROS 2 Integration Guide
 
-For enterprise-grade robotics, simply dropping a sensor read into a `rclcpp::TimerBase` is insufficient. Hardware sensors can disconnect, drivers can crash, and I2C buses can lock up.
+For robust robotics applications, simply dropping a sensor read into a `rclcpp::TimerBase` is insufficient. Hardware sensors can disconnect, drivers can crash, and I2C buses can lock up.
 
 This guide demonstrates how to integrate `libbno055-linux` using **ROS 2 Lifecycle Nodes (Managed Nodes)** and strict **Quality of Service (QoS)** profiles to build a truly fault-tolerant IMU driver.
 
@@ -147,9 +147,8 @@ When users run `rosdep install --from-paths src -y`, `rosdep` will automatically
 
 ## 4. Building and Running the ROS 2 Examples
 
-The library comes with three pre-built ROS 2 node examples in the `src/ros2/` directory:
-- **`bno055_publisher_node`**: A standard standalone ROS 2 publisher node.
-- **`bno055_perf_publisher_node`**: An optimized high-performance node designed for zero-copy intra-process communication.
+The library comes with two pre-built ROS 2 node implementations in the `src/ros2/` directory:
+- **`bno055_publisher_node`**: A high-performance standalone ROS 2 publisher node optimized for zero-copy intra-process communication.
 - **`bno055_lifecycle_publisher_node`**: A managed LifecycleNode that supports state transitions and low-power hardware state mapping.
 
 ### 4.1. Prerequisites
@@ -188,15 +187,11 @@ Since this repository contains a `package.xml`, it is compatible with `colcon` a
 You can launch and configure the nodes using the provided launch file and parameters YAML file.
 
 #### A. Launching via Launch File (Recommended)
-You can launch any of the three node types (`standard`, `perf`, or `lifecycle`) and customize their parameters using the ROS 2 Launch system.
+You can launch either of the node types (`standard` or `lifecycle`) and customize their parameters using the ROS 2 Launch system.
 
-*   **Standard Node (Default)**:
+*   **Standard Zero-Copy Node (Default)**:
     ```bash
     ros2 launch libbno055_linux bno055_launch.py node_type:=standard
-    ```
-*   **High-Performance Node**:
-    ```bash
-    ros2 launch libbno055_linux bno055_launch.py node_type:=perf
     ```
 *   **Lifecycle Node**:
     ```bash
@@ -209,17 +204,13 @@ ros2 launch libbno055_linux bno055_launch.py params_file:=/path/to/your/custom_p
 ```
 
 #### B. Direct Command Line (Alternative)
-*   **Standard Standalone Node**:
+*   **Standard Zero-Copy Node**:
     ```bash
     ros2 run libbno055_linux bno055_publisher_node
     ```
     You can override parameters directly via CLI:
     ```bash
     ros2 run libbno055_linux bno055_publisher_node --ros-args -p device:="/dev/i2c-2" -p address:=40
-    ```
-*   **High-Performance Zero-Copy Node**:
-    ```bash
-    ros2 run libbno055_linux bno055_perf_publisher_node
     ```
 *   **Lifecycle Managed Node**:
     ```bash
