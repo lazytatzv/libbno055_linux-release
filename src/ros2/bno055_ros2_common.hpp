@@ -8,6 +8,9 @@
 #include <memory>
 #include <rclcpp/rclcpp.hpp>
 #include <sensor_msgs/msg/imu.hpp>
+#include <sensor_msgs/msg/magnetic_field.hpp>
+#include <sensor_msgs/msg/temperature.hpp>
+#include <std_srvs/srv/trigger.hpp>
 #include <string>
 #include <vector>
 
@@ -16,21 +19,30 @@
 namespace bno055_ros2 {
 
 // Declare standard parameters
-inline void declare_common_parameters(rclcpp::Node* node) {
-    node->declare_parameter<std::string>("device", "/dev/i2c-1");
-    node->declare_parameter<int>("address", 0x28);
-    node->declare_parameter<std::string>("frame_id", "imu_link");
-    node->declare_parameter<double>("publish_rate", 50.0);
-    node->declare_parameter<std::string>("qos_reliability", "best_effort");
-    node->declare_parameter<int>("qos_history_depth", 10);
-    node->declare_parameter<std::string>("calibration_file", "");
-    node->declare_parameter<std::vector<double>>("orientation_covariance", std::vector<double>(9, 0.0));
-    node->declare_parameter<std::vector<double>>("angular_velocity_covariance", std::vector<double>(9, 0.0));
-    node->declare_parameter<std::vector<double>>("linear_acceleration_covariance", std::vector<double>(9, 0.0));
+template <typename T>
+inline void declare_common_parameters(T* node) {
+    node->template declare_parameter<std::string>("device", "/dev/i2c-1");
+    node->template declare_parameter<int>("address", 0x28);
+    node->template declare_parameter<std::string>("frame_id", "imu_link");
+    node->template declare_parameter<double>("publish_rate", 50.0);
+    node->template declare_parameter<std::string>("qos_reliability", "best_effort");
+    node->template declare_parameter<int>("qos_history_depth", 10);
+    node->template declare_parameter<std::string>("calibration_file", "");
+    node->template declare_parameter<std::vector<double>>("orientation_covariance", std::vector<double>(9, 0.0));
+    node->template declare_parameter<std::vector<double>>("angular_velocity_covariance", std::vector<double>(9, 0.0));
+    node->template declare_parameter<std::vector<double>>("linear_acceleration_covariance",
+                                                          std::vector<double>(9, 0.0));
+    node->template declare_parameter<std::string>("operation_mode", "imu_plus");
+    node->template declare_parameter<std::string>("axis_map_config", "p1");
+    node->template declare_parameter<std::string>("axis_map_sign", "p1");
+    node->template declare_parameter<bool>("use_external_crystal", true);
+    node->template declare_parameter<std::vector<double>>("magnetic_field_covariance", std::vector<double>(9, 0.0));
+    node->template declare_parameter<double>("temperature_variance", 0.0);
 }
 
 // Redirect logger callback
-inline void setup_logger_redirection(rclcpp::Node* node, bno055lib::BNO055& imu) {
+template <typename T>
+inline void setup_logger_redirection(T* node, bno055lib::BNO055& imu) {
     imu.setLogger([node](bno055lib::LogLevel level, std::string_view message) {
         switch (level) {
             case bno055lib::LogLevel::Debug:
@@ -50,10 +62,11 @@ inline void setup_logger_redirection(rclcpp::Node* node, bno055lib::BNO055& imu)
 }
 
 // Set covariances from parameters
-inline void fill_imu_covariances(rclcpp::Node* node, sensor_msgs::msg::Imu& message) {
-    auto ori_cov = node->get_parameter("orientation_covariance").as_double_array();
-    auto gyro_cov = node->get_parameter("angular_velocity_covariance").as_double_array();
-    auto accel_cov = node->get_parameter("linear_acceleration_covariance").as_double_array();
+template <typename T>
+inline void fill_imu_covariances(T* node, sensor_msgs::msg::Imu& message) {
+    auto ori_cov = node->template get_parameter("orientation_covariance").as_double_array();
+    auto gyro_cov = node->template get_parameter("angular_velocity_covariance").as_double_array();
+    auto accel_cov = node->template get_parameter("linear_acceleration_covariance").as_double_array();
 
     if (ori_cov.size() == 9) std::copy(ori_cov.begin(), ori_cov.end(), message.orientation_covariance.begin());
     if (gyro_cov.size() == 9) std::copy(gyro_cov.begin(), gyro_cov.end(), message.angular_velocity_covariance.begin());
@@ -62,15 +75,16 @@ inline void fill_imu_covariances(rclcpp::Node* node, sensor_msgs::msg::Imu& mess
 }
 
 // Build standard diagnostic array
-inline diagnostic_msgs::msg::DiagnosticArray::UniquePtr build_diagnostics(rclcpp::Node* node, bno055lib::BNO055& imu,
+template <typename T>
+inline diagnostic_msgs::msg::DiagnosticArray::UniquePtr build_diagnostics(T* node, bno055lib::BNO055& imu,
                                                                           const std::string& node_name) {
     auto diag_arr = std::make_unique<diagnostic_msgs::msg::DiagnosticArray>();
     diag_arr->header.stamp = node->now();
 
     auto status = diagnostic_msgs::msg::DiagnosticStatus();
     status.name = std::string("libbno055_linux: ") + node_name;
-    status.hardware_id =
-        node->get_parameter("device").as_string() + ":" + std::to_string(node->get_parameter("address").as_int());
+    status.hardware_id = node->template get_parameter("device").as_string() + ":" +
+                         std::to_string(node->template get_parameter("address").as_int());
 
     auto diag = imu.getDiagnostics();
 
@@ -120,6 +134,60 @@ inline diagnostic_msgs::msg::DiagnosticArray::UniquePtr build_diagnostics(rclcpp
 
     diag_arr->status.push_back(status);
     return diag_arr;
+}
+
+inline bno055lib::OpMode parse_op_mode(const std::string& mode_str) {
+    if (mode_str == "config") return bno055lib::OpMode::Config;
+    if (mode_str == "acc_only") return bno055lib::OpMode::AccOnly;
+    if (mode_str == "mag_only") return bno055lib::OpMode::MagOnly;
+    if (mode_str == "gyro_only") return bno055lib::OpMode::GyroOnly;
+    if (mode_str == "acc_mag") return bno055lib::OpMode::AccMag;
+    if (mode_str == "acc_gyro") return bno055lib::OpMode::AccGyro;
+    if (mode_str == "mag_gyro") return bno055lib::OpMode::MagGyro;
+    if (mode_str == "amg") return bno055lib::OpMode::AMG;
+    if (mode_str == "imu_plus") return bno055lib::OpMode::IMUPlus;
+    if (mode_str == "compass") return bno055lib::OpMode::Compass;
+    if (mode_str == "m4g") return bno055lib::OpMode::M4G;
+    if (mode_str == "ndof_fmc_off") return bno055lib::OpMode::NDOF_FMC_Off;
+    if (mode_str == "ndof") return bno055lib::OpMode::NDOF;
+    return bno055lib::OpMode::IMUPlus;
+}
+
+inline bno055lib::AxisMapConfig parse_axis_map_config(const std::string& str) {
+    if (str == "p0") return bno055lib::AxisMapConfig::P0;
+    if (str == "p1") return bno055lib::AxisMapConfig::P1;
+    if (str == "p2") return bno055lib::AxisMapConfig::P2;
+    if (str == "p3") return bno055lib::AxisMapConfig::P3;
+    if (str == "p4") return bno055lib::AxisMapConfig::P4;
+    if (str == "p5") return bno055lib::AxisMapConfig::P5;
+    if (str == "p6") return bno055lib::AxisMapConfig::P6;
+    if (str == "p7") return bno055lib::AxisMapConfig::P7;
+    return bno055lib::AxisMapConfig::P1;
+}
+
+inline bno055lib::AxisMapSign parse_axis_map_sign(const std::string& str) {
+    if (str == "p0") return bno055lib::AxisMapSign::P0;
+    if (str == "p1") return bno055lib::AxisMapSign::P1;
+    if (str == "p2") return bno055lib::AxisMapSign::P2;
+    if (str == "p3") return bno055lib::AxisMapSign::P3;
+    if (str == "p4") return bno055lib::AxisMapSign::P4;
+    if (str == "p5") return bno055lib::AxisMapSign::P5;
+    if (str == "p6") return bno055lib::AxisMapSign::P6;
+    if (str == "p7") return bno055lib::AxisMapSign::P7;
+    return bno055lib::AxisMapSign::P1;
+}
+
+template <typename T>
+inline void apply_advanced_features(T* node, bno055lib::BNO055& imu) {
+    imu.setAxisRemap(parse_axis_map_config(node->template get_parameter("axis_map_config").as_string()));
+    imu.setAxisSign(parse_axis_map_sign(node->template get_parameter("axis_map_sign").as_string()));
+    imu.setExtCrystalUse(node->template get_parameter("use_external_crystal").as_bool());
+}
+
+template <typename T>
+inline void fill_mag_covariance(T* node, sensor_msgs::msg::MagneticField& message) {
+    auto mag_cov = node->template get_parameter("magnetic_field_covariance").as_double_array();
+    if (mag_cov.size() == 9) std::copy(mag_cov.begin(), mag_cov.end(), message.magnetic_field_covariance.begin());
 }
 
 }  // namespace bno055_ros2

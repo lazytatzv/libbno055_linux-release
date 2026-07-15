@@ -1,0 +1,12 @@
+libbno055-linux (1.2.0-1) jammy; urgency=medium
+
+  * Major stable release introducing zero-copy intra-process comms,
+    strict noexcept C++ API, and PPA support.
+
+ -- lazytatzv <lazytatzv@users.noreply.github.com>  Wed, 15 Jul 2026 10:20:00 +0900
+
+libbno055-linux (1.1.1-1) jammy; urgency=medium
+
+  * Initial PPA release.
+
+ -- lazytatzv <lazytatzv@users.noreply.github.com>  Wed, 15 Jul 2026 09:50:00 +0900
