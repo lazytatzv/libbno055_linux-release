@@ -5,6 +5,22 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.2.3] - 2026-07-16
+
+### Fixed
+- Fixed missing member variable declarations for `mag_publisher_` and `temp_publisher_` in the lifecycle node.
+- Removed stray python scripts that were accidentally committed.
+
+## [1.2.2] - 2026-07-16
+
+### Fixed
+- Fixed CMake keyword signature mismatch (`target_link_libraries` vs `ament_target_dependencies`) for ROS 2 nodes.
+
+## [1.2.1] - 2026-07-16
+
+### Fixed
+- Fixed ROS 2 CMake target linking by using `ament_target_dependencies` instead of `target_link_libraries` to prevent build failures on the ROS Buildfarm.
+
 ## [1.2.0] - 2026-07-15
 
 ### Added
