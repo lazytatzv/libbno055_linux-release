@@ -38,3 +38,37 @@ jobs:
       run: |
         cd build
         ctest --output-on-failure
+
+  ros2-build:
+    name: ROS 2 Build (${{ matrix.ros_distro }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        ros_distro: [humble, jazzy]
+    container:
+      image: ros:${{ matrix.ros_distro }}-ros-base
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v3
+      with:
+        path: src/libbno055_linux
+
+    - name: Install dependencies
+      run: |
+        apt-get update
+        apt-get install -y python3-colcon-common-extensions git
+        rosdep update
+        rosdep install --from-paths src --ignore-src -y --rosdistro ${{ matrix.ros_distro }}
+
+    - name: Build ROS 2 workspace
+      run: |
+        . /opt/ros/${{ matrix.ros_distro }}/setup.sh
+        colcon build --packages-select libbno055_linux --cmake-args -DCMAKE_BUILD_TYPE=Release
+
+    - name: Run ROS 2 Tests
+      run: |
+        . /opt/ros/${{ matrix.ros_distro }}/setup.sh
+        colcon test --packages-select libbno055_linux
+        colcon test-result --all
