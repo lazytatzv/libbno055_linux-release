@@ -134,6 +134,8 @@ public:
 
         // Activate lifecycle publishers
         publisher_->on_activate();
+        mag_publisher_->on_activate();
+        temp_publisher_->on_activate();
         diag_publisher_->on_activate();
 
         // Restart timers
@@ -155,6 +157,8 @@ public:
 
         // Deactivate publishers
         publisher_->on_deactivate();
+        mag_publisher_->on_deactivate();
+        temp_publisher_->on_deactivate();
         diag_publisher_->on_deactivate();
 
         // Suspend sensor to save power
@@ -173,7 +177,10 @@ public:
         timer_.reset();
         diag_timer_.reset();
         publisher_.reset();
+        mag_publisher_.reset();
+        temp_publisher_.reset();
         diag_publisher_.reset();
+        save_calib_service_.reset();
 
         RCLCPP_INFO(this->get_logger(), "Cleanup successful.");
         return CallbackReturn::SUCCESS;
@@ -190,7 +197,10 @@ public:
         timer_.reset();
         diag_timer_.reset();
         publisher_.reset();
+        mag_publisher_.reset();
+        temp_publisher_.reset();
         diag_publisher_.reset();
+        save_calib_service_.reset();
 
         return CallbackReturn::SUCCESS;
     }
@@ -204,6 +214,8 @@ private:
         auto quat = imu_.getQuaternionNoexcept();
         auto gyro = imu_.getGyroscopeNoexcept();
         auto accel = imu_.getLinearAccelerationNoexcept();
+        auto mag = imu_.getMagnetometerNoexcept();
+        auto temp = imu_.getTemperatureNoexcept();
 
         if (!quat || !gyro || !accel || !mag || !temp) {
             RCLCPP_WARN_THROTTLE(this->get_logger(), *this->get_clock(), 1000,
@@ -268,6 +280,9 @@ private:
     bno055lib::BNO055 imu_;
     std::string frame_id_;
     rclcpp_lifecycle::LifecyclePublisher<sensor_msgs::msg::Imu>::SharedPtr publisher_;
+    rclcpp_lifecycle::LifecyclePublisher<sensor_msgs::msg::MagneticField>::SharedPtr mag_publisher_;
+    rclcpp_lifecycle::LifecyclePublisher<sensor_msgs::msg::Temperature>::SharedPtr temp_publisher_;
+    rclcpp::Service<std_srvs::srv::Trigger>::SharedPtr save_calib_service_;
     rclcpp_lifecycle::LifecyclePublisher<diagnostic_msgs::msg::DiagnosticArray>::SharedPtr diag_publisher_;
     rclcpp::TimerBase::SharedPtr timer_;
     rclcpp::TimerBase::SharedPtr diag_timer_;
