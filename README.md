@@ -10,22 +10,16 @@
 
 **[View the Official Web Documentation (API, Architecture, Integration Guides)](https://lazytatzv.github.io/libbno055-linux/)**
 
-A thread-safe, dependency-free C++17 library for the BNO055 sensor over I2C on Linux. It provides both a standalone library and ROS 2 nodes.
+C++17 BNO055 library and ROS 2 nodes for Linux.
 
-1. **Standalone C++17 Library**: Zero ROS dependencies. Link it natively in embedded Linux applications (Raspberry Pi, Jetson) using standard CMake.
-2. **ROS 2 Nodes**: Provides ROS 2 nodes with zero-copy intra-process communication and Lifecycle Node management.
+## Features
 
-Designed for control systems that require automatic I2C error recovery and deterministic (`noexcept`) execution.
-
----
-
-## Key Features
-
-*   **Library + ROS 2**: Cleanly separated hardware logic and ROS interfaces. Use it as a standalone C++ library (`-lbno055-linux`) or launch it as a ROS 2 node.
-*   **I2C Error Recovery**: BNO055 is known for I2C lockups on Raspberry Pi due to clock stretching. This library catches `EIO` faults, flushes the bus, and recovers sensor state automatically.
-*   **Zero-Copy & noexcept APIs**: Zero heap allocations in hot paths. The ROS 2 node uses `std::unique_ptr` publishing and `noexcept` APIs for zero-copy memory transport and deterministic execution.
-*   **C++17 & Dependency-Free**: Pure C++17 implementation. No external dependencies or Arduino wrappers.
-*   **Cross-Platform Testing**: Built-in I2C Mocking allows compilation and testing natively on macOS/Windows without physical hardware.
+- **Standalone C++17 library**: Link natively via CMake without ROS dependencies.
+- **ROS 2 nodes**: Provides a ROS 2 interface.
+- **Automatic I2C recovery**: Implements automatic recovery for `EIO` faults (e.g., clock stretching issues on Raspberry Pi).
+- **No heap allocations**: Avoids dynamic memory allocation in hot sensor readout paths.
+- **Zero-copy publishers**: Implements zero-copy memory transport (`std::unique_ptr`) for ROS 2 publishers.
+- **Built-in I2C mocking**: Provides built-in I2C mocking for compilation and testing on macOS/Windows.
 
 ---
 
@@ -54,15 +48,30 @@ Designed for control systems that require automatic I2C error recovery and deter
 
        // Initialize in NDOF fusion mode
        if (!imu.begin(bno055lib::OpMode::NDOF)) {
-           std::cerr << "Sensor initialization failed!" << std::endl;
+           std::cerr << "Sensor initialization failed!\n";
            return 1;
        }
 
        for (int i = 0; i < 10; ++i) {
-           auto q = imu.getQuaternionNoexcept();
-            if (q) {
-               std::cout << "w: " << q->w << " x: " << q->x << " y: " << q->y << " z: " << q->z << "\n";
-            }
+           // Orientation (Euler Angles converted from Quaternion)
+           if (auto q = imu.getQuaternionNoexcept()) {
+               auto euler = bno055lib::toEulerDegrees(*q);
+               std::cout << "Euler (deg): Roll=" << euler.x << " Pitch=" << euler.y << " Yaw=" << euler.z << "\n";
+           }
+
+           // Acceleration
+           if (auto acc = imu.getAccelerometerNoexcept()) {
+               std::cout << "Accel (m/s^2): X=" << acc->x << " Y=" << acc->y << " Z=" << acc->z << "\n";
+           }
+
+           // Calibration Status
+           auto calib = imu.getCalibrationStatus();
+           std::cout << "Calibration: SYS=" << static_cast<int>(calib.sys) 
+                     << " GYRO=" << static_cast<int>(calib.gyro) << "\n";
+
+           // Temperature
+           std::cout << "Temperature: " << static_cast<int>(imu.getTemperature()) << " C\n\n";
+
            std::this_thread::sleep_for(std::chrono::milliseconds(100));
        }
        return 0;
