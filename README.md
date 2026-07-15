@@ -8,20 +8,24 @@
 ![CI](https://github.com/lazytatzv/libbno055-linux/actions/workflows/ci.yml/badge.svg)
 ![License](https://img.shields.io/badge/License-MIT-green.svg)
 
-A robust, thread-safe, and dependency-free C++17 library for the BNO055 sensor over I2C on Linux.
-
 **[View the Official Web Documentation (API, Architecture, Integration Guides)](https://lazytatzv.github.io/libbno055-linux/)**
 
-Designed for robotic control systems, autonomous vehicles, and ROS 2 deployments that demand high reliability, automatic error recovery, and deterministic (`noexcept`) execution.
+A thread-safe, dependency-free C++17 library for the BNO055 sensor over I2C on Linux. It provides both a standalone library and ROS 2 nodes.
+
+1. **Standalone C++17 Library**: Zero ROS dependencies. Link it natively in embedded Linux applications (Raspberry Pi, Jetson) using standard CMake.
+2. **ROS 2 Nodes**: Provides ROS 2 nodes with zero-copy intra-process communication and Lifecycle Node management.
+
+Designed for control systems that require automatic I2C error recovery and deterministic (`noexcept`) execution.
 
 ---
 
 ## Key Features
 
-*   **Self-Healing (Auto-Recovery)**: BNO055 is notorious for I2C lockups on Raspberry Pi due to clock stretching. This library transparently catches `EIO` faults, flushes the bus, and recovers sensor state automatically without crashing your application.
-*   **Real-Time Safe**: Zero heap allocations in hot paths and exception-free (`noexcept`) APIs guarantee bounded, zero-jitter execution time for high-frequency control loops.
-*   **Modern & Lightweight**: Pure C++17 implementation. Zero external dependencies, no Arduino wrappers.
-*   **CI/CD Ready**: Cross-platform compilation support with built-in I2C Mocking. Compile and test natively on macOS/Windows without physical hardware.
+*   **Library + ROS 2**: Cleanly separated hardware logic and ROS interfaces. Use it as a standalone C++ library (`-lbno055-linux`) or launch it as a ROS 2 node.
+*   **I2C Error Recovery**: BNO055 is known for I2C lockups on Raspberry Pi due to clock stretching. This library catches `EIO` faults, flushes the bus, and recovers sensor state automatically.
+*   **Zero-Copy & noexcept APIs**: Zero heap allocations in hot paths. The ROS 2 node uses `std::unique_ptr` publishing and `noexcept` APIs for zero-copy memory transport and deterministic execution.
+*   **C++17 & Dependency-Free**: Pure C++17 implementation. No external dependencies or Arduino wrappers.
+*   **Cross-Platform Testing**: Built-in I2C Mocking allows compilation and testing natively on macOS/Windows without physical hardware.
 
 ---
 
@@ -55,8 +59,10 @@ Designed for robotic control systems, autonomous vehicles, and ROS 2 deployments
        }
 
        for (int i = 0; i < 10; ++i) {
-           auto q = imu.getQuaternionOrDefault();
-           std::cout << "w: " << q.w << " x: " << q.x << " y: " << q.y << " z: " << q.z << std::endl;
+           auto q = imu.getQuaternionNoexcept();
+            if (q) {
+               std::cout << "w: " << q->w << " x: " << q->x << " y: " << q->y << " z: " << q->z << "\n";
+            }
            std::this_thread::sleep_for(std::chrono::milliseconds(100));
        }
        return 0;
@@ -87,9 +93,9 @@ Designed for robotic control systems, autonomous vehicles, and ROS 2 deployments
    ```
 
 2. **Launch with Parameters**:
-   Launch standard, performance (zero-copy), or lifecycle nodes:
+   Launch the high-performance zero-copy node (default) or the lifecycle node:
    ```bash
-   ros2 launch libbno055_linux bno055_launch.py node_type:=standard
+   ros2 launch libbno055_linux bno055_launch.py
    ```
 
 ---
