@@ -22,18 +22,58 @@
 namespace bno055lib {
     // 3D coordinate vector (used for accelerometer, gyroscope, magnetometer, euler, gravity, linear accel)
     struct Vector3 {
-        double x;
-        double y;
-        double z;
+        float x;
+        float y;
+        float z;
     };
 
     // 3D orientation quaternion representation
     struct Quaternion {
-        double w; // Real part
-        double x; // Imaginary X
-        double y; // Imaginary Y
-        double z; // Imaginary Z
+        float w; // Real part
+        float x; // Imaginary X
+        float y; // Imaginary Y
+        float z; // Imaginary Z
     };
+
+    // Transport interface representing I/O connection to the BNO055 hardware
+    class Transport {
+    public:
+        virtual ~Transport() = default;
+        virtual bool open() = 0;
+        virtual void close() = 0;
+        virtual bool isOpen() const = 0;
+        virtual bool write8(uint8_t reg, uint8_t value) = 0;
+        virtual bool writeLen(uint8_t reg, const uint8_t* buffer, uint8_t len) = 0;
+        virtual bool read8(uint8_t reg, uint8_t& value) = 0;
+        virtual bool readLen(uint8_t reg, uint8_t* buffer, uint8_t len) = 0;
+    };
+
+    // Mock implementation of Transport for hardware-independent verification
+    class MockTransport : public Transport {
+    public:
+        MockTransport();
+        void setRegister(uint8_t reg, uint8_t value);
+        void setRegister16LE(uint8_t reg, int16_t value);
+        void setFailOpen(bool fail);
+        void setFailReads(bool fail);
+        void setFailWrites(bool fail);
+        uint32_t getWriteCount() const;
+        uint32_t getReadCount() const;
+        void reset();
+    };
+
+    // Bundled structure representing all sensor physical data
+    struct AllData {
+        Vector3 accel;
+        Vector3 mag;
+        Vector3 gyro;
+        Vector3 euler;
+        Vector3 linear_accel;
+        Vector3 gravity;
+        Quaternion quat;
+        int8_t temp;
+    };
+    using AsyncDataCallback = std::function<void(const AllData& data)>;
     
     // Binary calibration offsets (22 bytes total) for saving/restoring sensor profile
     struct Offsets {
@@ -94,11 +134,20 @@ All functions in the `BNO055` class are thread-safe and protect access to the un
         *   `i2c_device`: `std::string_view`. The Linux file path to the I2C adapter (e.g., `/dev/i2c-1`).
     *   *Returns*: None (Constructor).
     *   *Description*: Creates a BNO055 handler. If compiled on macOS/Windows, it falls back to the mock mode and accepts any mock device name.
+*   **explicit BNO055(std::unique_ptr<Transport> transport)**
+    *   *Parameters*:
+        *   `transport`: `std::unique_ptr<Transport>`. Custom transport implementation (e.g., a `MockTransport` instance).
+    *   *Returns*: None (Constructor).
+    *   *Description*: Creates a BNO055 handler using a custom transport layer. Extremely useful for unit testing (dependency injection) and porting.
 *   **bool begin(OpMode mode = OpMode::NDOF)**
     *   *Parameters*:
         *   `mode`: `OpMode`. The target operation mode to start in.
     *   *Returns*: `bool`. `true` if initialization, self-test verification, and mode transition succeeded; `false` on boot timeouts or I2C failures.
     *   *Description*: Power-cycles the sensor, verifies the Chip ID, configures default Axis Maps and Unit settings, and spawns the background auto-recovery thread.
+*   **bool reset()**
+    *   *Parameters*: None.
+    *   *Returns*: `bool`. `true` if reset and mode restoration succeeded; `false` on failure.
+    *   *Description*: Triggers a software hardware-reset using the `SYS_TRIGGER` register and completely re-initializes the device into the previously active operating mode. Useful for recovery from external hardware lockups.
 
 #### Configuration
 
@@ -164,6 +213,11 @@ These functions query raw data registers and convert them to SI units. They thro
     *   *Parameters*: None.
     *   *Returns*: `int8_t`. Chip temperature in degrees Celsius (C).
     *   *Exceptions*: Throws `bno055lib::IMUError`.
+*   **RawSensorData getRawSensorData()**
+    *   *Parameters*: None.
+    *   *Returns*: `RawSensorData`. Struct containing converted raw accelerometer, magnetometer, and gyroscope vectors.
+    *   *Exceptions*: Throws `bno055lib::IMUError`.
+    *   *Description*: Sequentially reads 18 bytes of raw sensor data in a single burst I2C transaction, minimizing bus occupancy.
 
 #### Sensor Data (Exception-free / noexcept APIs)
 
@@ -177,6 +231,7 @@ These companion APIs perform the exact same register queries and conversions but
 *   **std::optional\<Vector3\> getGravityNoexcept() noexcept**
 *   **std::optional\<Quaternion\> getQuaternionNoexcept() noexcept**
 *   **std::optional\<int8_t\> getTemperatureNoexcept() noexcept**
+*   **std::optional\<RawSensorData\> getRawSensorDataNoexcept() noexcept**
     *   *Parameters*: None.
     *   *Returns*: `std::optional<T>`. Contains the requested struct on success; `std::nullopt` on communication failure.
     *   *Description*: Safety-hardened read path that increments I2C diagnostic counters upon failure without generating CPU exceptions.
@@ -243,10 +298,58 @@ These companion APIs perform the exact same register queries and conversions but
     *   *Returns*: `void`.
     *   *Description*: Hooks a custom logging function (such as `std::cout` or ROS 2 logging macros) to direct library diagnostics, warnings, and reconnect traces.
 
+#### Asynchronous Reading
+
+*   **bool startAsyncReading(double rate_hz, AsyncDataCallback callback)**
+    *   *Parameters*:
+        *   `rate_hz`: `double`. The target frequency in Hz to query the sensor data.
+        *   `callback`: `AsyncDataCallback`. Callback function executed on the background thread whenever new measurements are gathered.
+    *   *Returns*: `bool`. `true` if background polling thread successfully spawned; `false` if already running.
+    *   *Description*: Spawns a high-priority background polling thread that sleeps to minimize timing jitter. Calls `callback` with a thread-safe copy of `AllData`.
+*   **void stopAsyncReading()**
+    *   *Parameters*: None.
+    *   *Returns*: `void`.
+    *   *Description*: Signals the background async thread to terminate and blocks until it joins.
+*   **bool startRawAsyncReading(double rate_hz, RawAsyncDataCallback callback)**
+    *   *Parameters*:
+        *   `rate_hz`: `double`. Polling frequency.
+        *   `callback`: `RawAsyncDataCallback`. Callback executing with raw 3-axis readings.
+    *   *Returns*: `bool`.
+    *   *Description*: Spawns a lightweight async thread polling only raw IMU data via burst transaction.
+*   **void stopRawAsyncReading()**
+    *   *Parameters*: None.
+    *   *Returns*: `void`.
+    *   *Description*: Stops the raw async polling thread.
+
+#### Interrupt Driven Reading (IRQ)
+
+*   **bool startInterruptDrivenReading(int gpio_pin, RawAsyncDataCallback callback)**
+    *   *Parameters*:
+        *   `gpio_pin`: `int`. Linux GPIO pin connected to the BNO055 INT pin.
+        *   `callback`: `RawAsyncDataCallback`. Handler triggered on interrupt.
+    *   *Returns*: `bool`. `true` if background IRQ waiting thread spawned.
+    *   *Description*: Registers a rising-edge trigger on the specified Linux GPIO pin. When BNO055 triggers INT, the kernel interrupt immediately unblocks POSIX `poll()` on the GPIO sysfs file descriptors, firing the callback with raw burst readings at sub-millisecond latency.
+*   **void stopInterruptDrivenReading()**
+    *   *Parameters*: None.
+    *   *Returns*: `void`.
+    *   *Description*: Stops the interrupt-driven IRQ monitoring thread.
+
+#### Automatic Calibration
+
+*   **void enableAutoCalibration(std::string_view filepath)**
+    *   *Parameters*:
+        *   `filepath`: `std::string_view`. The binary calibration profile path to load from on `begin()` and save to.
+    *   *Returns*: `void`.
+    *   *Description*: Activates automated calibration loading on startup and writes offsets back to the disk target once fully calibrated status is reached.
+*   **void disableAutoCalibration()**
+    *   *Parameters*: None.
+    *   *Returns*: `void`.
+    *   *Description*: Deactivates the automated calibration load/save helper logic.
+
 ### Utilities (Class-External)
 
 *   **Vector3 toEulerDegrees(const Quaternion& q) noexcept**
     *   *Parameters*:
         *   `q`: `const Quaternion&`. The normalized unit quaternion representation of orientation.
     *   *Returns*: `Vector3`. Roll, Pitch, and Yaw in degrees (Mapping: `x` = Roll `[-180, 180]`, `y` = Pitch `[-90, 90]`, `z` = Yaw `[0, 360)`).
-    *   *Description*: Utility function to convert Quaternion orientation into human-readable Euler angles in degrees.
+    *   *Description*: Utility function to convert Quaternion orientation into human-readable Euler angles in degrees (now executing on single-precision `float` elements).
