@@ -2,9 +2,9 @@ name: CI
 
 on:
   push:
-    branches: [ main, master ]
+    branches: [main, master]
   pull_request:
-    branches: [ main, master ]
+    branches: [main, master]
 
 jobs:
   build-and-test:
@@ -15,29 +15,65 @@ jobs:
         os: [ubuntu-latest, macos-latest]
 
     steps:
-    - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
 
-    - name: Install dependencies (Ubuntu)
-      if: startsWith(matrix.os, 'ubuntu')
-      run: |
-        sudo apt-get update
-        sudo apt-get install -y clang-tidy clang-format
+      - name: Install dependencies (Ubuntu)
+        if: startsWith(matrix.os, 'ubuntu')
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y clang-tidy clang-format
 
-    - name: Check code formatting (clang-format)
-      if: startsWith(matrix.os, 'ubuntu')
-      run: |
-        find include src tests -name "*.cpp" -o -name "*.hpp" | xargs clang-format --dry-run --Werror
+      - name: Check code formatting (clang-format)
+        if: startsWith(matrix.os, 'ubuntu')
+        run: |
+          find include src tests -name "*.cpp" -o -name "*.hpp" | xargs clang-format --dry-run --Werror
 
-    - name: Configure CMake
-      run: cmake -S . -B build -DBUILD_TESTING=ON -DENABLE_CLANG_TIDY=ON
+      - name: Configure CMake
+        run: cmake -S . -B build -DBUILD_TESTING=ON -DENABLE_CLANG_TIDY=ON
 
-    - name: Build
-      run: cmake --build build --config Release
+      - name: Build
+        run: cmake --build build --config Release
 
-    - name: Run Tests
-      run: |
-        cd build
-        ctest --output-on-failure
+      - name: Run Tests
+        run: |
+          cd build
+          ctest --output-on-failure
+
+  coverage:
+    name: Code Coverage
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y lcov
+
+      - name: Configure with coverage flags
+        run: cmake -S . -B build -DBUILD_TESTING=ON -DENABLE_CLANG_TIDY=OFF -DCMAKE_BUILD_TYPE=Debug -DCMAKE_CXX_FLAGS="--coverage -fprofile-arcs -ftest-coverage"
+
+      - name: Build
+        run: cmake --build build
+
+      - name: Run Tests
+        run: |
+          cd build
+          ctest --output-on-failure
+
+      - name: Generate coverage report
+        run: |
+          lcov --capture --directory build --output-file coverage.info --ignore-errors mismatch
+          lcov --remove coverage.info '/usr/*' '*/tests/*' '*/googletest/*' --output-file coverage.info
+          lcov --list coverage.info
+
+      - name: Upload to Codecov
+        uses: codecov/codecov-action@v4
+        with:
+          file: coverage.info
+          fail_ci_if_error: false
+        env:
+          CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
 
   ros2-build:
     name: ROS 2 Build (${{ matrix.ros_distro }})
@@ -48,27 +84,27 @@ jobs:
         ros_distro: [humble, jazzy]
     container:
       image: ros:${{ matrix.ros_distro }}-ros-base
-    
+
     steps:
-    - name: Checkout code
-      uses: actions/checkout@v3
-      with:
-        path: src/libbno055_linux
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          path: src/libbno055_linux
 
-    - name: Install dependencies
-      run: |
-        apt-get update
-        apt-get install -y python3-colcon-common-extensions git
-        rosdep update
-        rosdep install --from-paths src --ignore-src -y --rosdistro ${{ matrix.ros_distro }}
+      - name: Install dependencies
+        run: |
+          apt-get update
+          apt-get install -y python3-colcon-common-extensions git
+          rosdep update
+          rosdep install --from-paths src --ignore-src -y --rosdistro ${{ matrix.ros_distro }}
 
-    - name: Build ROS 2 workspace
-      run: |
-        . /opt/ros/${{ matrix.ros_distro }}/setup.sh
-        colcon build --packages-select libbno055_linux --cmake-args -DCMAKE_BUILD_TYPE=Release
+      - name: Build ROS 2 workspace
+        run: |
+          . /opt/ros/${{ matrix.ros_distro }}/setup.sh
+          colcon build --packages-select libbno055_linux --cmake-args -DCMAKE_BUILD_TYPE=Release
 
-    - name: Run ROS 2 Tests
-      run: |
-        . /opt/ros/${{ matrix.ros_distro }}/setup.sh
-        colcon test --packages-select libbno055_linux
-        colcon test-result --all
+      - name: Run ROS 2 Tests
+        run: |
+          . /opt/ros/${{ matrix.ros_distro }}/setup.sh
+          colcon test --packages-select libbno055_linux
+          colcon test-result --all
