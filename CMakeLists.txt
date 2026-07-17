@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.10)
-project(libbno055_linux VERSION 1.2.3 LANGUAGES CXX)
+project(libbno055_linux VERSION 1.4.1 LANGUAGES CXX)
 
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -18,7 +18,11 @@ set(HEADERS
 add_library(libbno055-linux SHARED ${SOURCES} ${HEADERS})
 
 # Prevent duplicate "lib" prefix (e.g. liblibbno055-linux.so)
-set_target_properties(libbno055-linux PROPERTIES PREFIX "")
+set_target_properties(libbno055-linux PROPERTIES
+    PREFIX ""
+    VERSION ${PROJECT_VERSION}
+    SOVERSION ${PROJECT_VERSION_MAJOR}
+)
 
 # Include directories
 target_include_directories(libbno055-linux
@@ -49,14 +53,21 @@ find_package(Threads REQUIRED)
 target_link_libraries(libbno055-linux PRIVATE Threads::Threads)
 
 # Example executables
-add_executable(calibrate_imu examples/calibrate.cpp)
-target_link_libraries(calibrate_imu PRIVATE libbno055-linux)
+option(BUILD_EXAMPLES "Build example executables" ON)
 
-add_executable(read_data_noexcept examples/read_data_noexcept.cpp)
-target_link_libraries(read_data_noexcept PRIVATE libbno055-linux)
+if(BUILD_EXAMPLES)
+    add_executable(calibrate_imu examples/calibrate.cpp)
+    target_link_libraries(calibrate_imu PRIVATE libbno055-linux)
 
-add_executable(read_all_data examples/read_all_data.cpp)
-target_link_libraries(read_all_data PRIVATE libbno055-linux)
+    add_executable(read_data_noexcept examples/read_data_noexcept.cpp)
+    target_link_libraries(read_data_noexcept PRIVATE libbno055-linux)
+
+    add_executable(read_all_data examples/read_all_data.cpp)
+    target_link_libraries(read_all_data PRIVATE libbno055-linux)
+
+    add_executable(benchmark_imu examples/benchmark_imu.cpp)
+    target_link_libraries(benchmark_imu PRIVATE libbno055-linux)
+endif()
 
 # Optional ROS 2 integration (conditional build of ROS 2 publisher samples)
 find_package(rclcpp QUIET)
@@ -116,9 +127,11 @@ install(TARGETS libbno055-linux
     INCLUDES DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}
 )
 
-install(TARGETS calibrate_imu read_data_noexcept read_all_data
-    RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR}
-)
+if(BUILD_EXAMPLES)
+    install(TARGETS calibrate_imu read_data_noexcept read_all_data benchmark_imu
+        RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR}
+    )
+endif()
 
 # Install headers
 install(DIRECTORY include/libbno055-linux

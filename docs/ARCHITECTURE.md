@@ -81,20 +81,42 @@ A single `BNO055` instance is often accessed by multiple threads in a modern rob
 2. **Telemetry Thread (1Hz)**: Reading `getDiagnostics()` to monitor I2C health.
 3. **Service Callbacks**: Saving calibration profiles on demand.
 
-The internal `Impl` struct is protected by a lightweight `std::mutex`, ensuring that multi-byte I2C register reads (which require sequential `write` (register address) followed by `read` (data)) are strictly atomic and cannot be interleaved by the Linux scheduler.
+The internal `Impl` struct is protected by a lightweight `std::mutex`. 
+
+To maximize throughput and prevent blocking critical loops, **lock granularity is minimized**:
+* Lock acquisition is strictly scoped to raw I/O read/write transactions.
+* Mutex locks are explicitly released during retries (`std::this_thread::sleep_for`) and during the long self-healing `reconnect()` sequence.
+* This guarantees that threads querying diagnostics (`getDiagnostics()`) or invoking non-blocking APIs are never starved by blocking I2C operations.
 
 ---
 
-## 5. Cross-Platform Mocking (CI/CD Ready)
+## 5. Transport Abstraction Layer & Dependency Injection
 
-Modern C++ development relies heavily on Continuous Integration (GitHub Actions, GitLab CI). If a library strictly requires `<linux/i2c-dev.h>`, it cannot be compiled on macOS or Windows, breaking the CI pipeline for developers working on MacBooks.
-
-`libbno055-linux` detects the host OS at compile time via CMake. If compiled on a non-Linux platform, it automatically swaps the internal `Impl` to a **Mocked I2C Interface**.
-* **Result**: You can compile your ROS 2 packages natively on macOS/Windows, write GTest unit tests against the IMU logic, and verify your math without needing a physical Raspberry Pi or sensor.
+To decouple the library from the underlying Linux kernel file descriptors and hardware registers during test execution, the library introduces a **Transport Abstraction Layer**:
+* **Interface**: The `Transport` abstract base class provides pure virtual methods for single and multi-byte read/write access.
+* **Mock Implementation**: `MockTransport` эmulates a 256-byte virtual register map, providing hardware-free logic verification.
+* **Dependency Injection**: The core `BNO055` class can accept a `std::unique_ptr<Transport>` constructor parameter. When injected, the class routes all raw requests through the abstract interface instead of opening `/dev/i2c-*` or `/dev/ttyUSB*`.
+* **Testing Capability**: This architecture allows unit tests to verify register modifications, error counters, power states, and auto-calibration save mechanisms cleanly in any platform-agnostic CI/CD pipelines (such as macOS or Windows environments) with 100% test deterministic repeatability.
 
 ---
 
-## 6. ROS 2 Node Architectures & Zero-Copy Communication
+## 6. Single-Precision Floating-Point Optimization
+
+For robotics and high-frequency control loops executing on embedded Linux platforms (e.g., Raspberry Pi, BeagleBone ARM cores), floating-point math throughput is critical.
+* **Single vs. Double Precision**: Previous architectures utilized `double` (64-bit) for physical variables. However, ARM microcontrollers and application processors feature dedicated single-precision Hardware FPUs.
+* **Performance Enhancements**: All physical coordinates (`Vector3`), orientations (`Quaternion`), scale conversion factors, and Euler calculations (`toEulerDegrees`) are modified to use `float` (32-bit) type signatures.
+* **Result**: Enables vectorization optimization and lowers CPU cycle consumption during raw IMU parsing and rotation conversions.
+
+---
+
+## 7. Asynchronous Polling & Auto-Calibration Helplers
+
+* **Asynchronous Thread Engine**: The library provides an asynchronous execution engine via `startAsyncReading()`. This spawns a high-priority background polling thread that sleeps deterministically to minimize latency jitter.
+* **Auto-Calibration Pipeline**: Manually checking calibration values and writing offsets to storage in client code adds boilerplate. The library features an autonomous calibration pipeline: when enabled, it reads offset files on startup and automatically saves new calibration profiles to disk the exact moment the hardware reaches maximum calibration (`CalibrationStatus::isFullyCalibrated()`).
+
+---
+
+## 8. ROS 2 Node Architectures & Zero-Copy Communication
 
 The library includes two ROS 2 node implementations located in the `src/ros2/` directory, designed to cover various robotics system requirements:
 
