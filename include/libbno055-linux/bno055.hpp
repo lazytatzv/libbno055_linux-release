@@ -11,6 +11,8 @@
 #include <string_view>
 #include <system_error>
 
+#include "libbno055-linux/transport.hpp"
+
 namespace bno055lib {
 
 // Log levels for customization
@@ -27,11 +29,11 @@ public:
 
 // Standard 3D vector for physical readings
 struct Vector3 {
-    double x{0.0};
-    double y{0.0};
-    double z{0.0};
+    float x{0.0f};
+    float y{0.0f};
+    float z{0.0f};
 
-    double operator[](size_t index) const {
+    float operator[](size_t index) const {
         switch (index) {
             case 0:
                 return x;
@@ -44,7 +46,7 @@ struct Vector3 {
         }
     }
 
-    double& operator[](size_t index) {
+    float& operator[](size_t index) {
         switch (index) {
             case 0:
                 return x;
@@ -60,10 +62,10 @@ struct Vector3 {
 
 // Standard Quaternion for rotation representation
 struct Quaternion {
-    double w{1.0};
-    double x{0.0};
-    double y{0.0};
-    double z{0.0};
+    float w{1.0f};
+    float x{0.0f};
+    float y{0.0f};
+    float z{0.0f};
 };
 
 // Calibration offsets
@@ -143,10 +145,23 @@ enum class AxisMapSign : uint8_t {
 
 class BNO055 {
 public:
-    // Constructor
-    // i2c_address: Default BNO055_ADDRESS_A is 0x28. Alternate is 0x29.
+    // UART Configuration
+    struct UARTConfig {
+        std::string port{"/dev/ttyUSB0"};
+        uint32_t baudrate{115200};
+        double timeout{0.1};
+    };
+
+    // Constructors
+    // I2C mode: Default BNO055_ADDRESS_A is 0x28. Alternate is 0x29.
     // i2c_device: Linux I2C device node.
     explicit BNO055(uint8_t i2c_address = 0x28, std::string_view i2c_device = "/dev/i2c-1");
+
+    // UART mode: Connect using a USB-to-UART bridge
+    explicit BNO055(const UARTConfig& uart_config);
+
+    // Custom transport mode for testing / dependency injection
+    explicit BNO055(std::unique_ptr<Transport> transport);
 
     // Destructor
     ~BNO055();
@@ -158,8 +173,11 @@ public:
     BNO055& operator=(BNO055&&) noexcept;
 
     // Initialization
-    // Puts device into selected operation mode and configures unit selection to SI units
+    // Initialize the IMU and set the operating mode
     bool begin(OpMode mode = OpMode::NDOF);
+
+    // Hardware reset the IMU and restore the current operating mode
+    bool reset();
 
     // Set / Get operation mode
     void setMode(OpMode mode);
@@ -192,6 +210,17 @@ public:
     std::optional<Quaternion> getQuaternionNoexcept() noexcept;
     std::optional<int8_t> getTemperatureNoexcept() noexcept;
 
+    // High-performance EKF Burst Reading APIs
+    struct RawSensorData {
+        Vector3 accel;
+        Vector3 mag;
+        Vector3 gyro;
+    };
+    /// Retrieve all raw sensor outputs (accelerometer, magnetometer, gyroscope) in a single burst read transaction.
+    /// Highly optimized to reduce I2C transaction latency for state estimation filters (EKF).
+    RawSensorData getRawSensorData();
+    std::optional<RawSensorData> getRawSensorDataNoexcept() noexcept;
+
     // Beginner-friendly data getters (returns zero/default values on failure, no exceptions, no optionals)
     Vector3 getAccelerometerOrDefault() noexcept;
     Vector3 getMagnetometerOrDefault() noexcept;
@@ -222,6 +251,46 @@ public:
 
     // Custom Logger hook
     void setLogger(LoggerCallback callback);
+
+    // Asynchronous & Callback-driven Reading API
+    struct AllData {
+        Vector3 accel;
+        Vector3 mag;
+        Vector3 gyro;
+        Vector3 euler;
+        Vector3 linear_accel;
+        Vector3 gravity;
+        Quaternion quat;
+        int8_t temp;
+    };
+    using AsyncDataCallback = std::function<void(const AllData& data)>;
+
+    /// Start a background thread to poll data asynchronously.
+    /// @param rate_hz The polling rate in Hz (e.g. 50.0).
+    /// @param callback Callback executed every time new data is retrieved.
+    bool startAsyncReading(double rate_hz, AsyncDataCallback callback);
+
+    /// Stop the background async reading thread.
+    void stopAsyncReading();
+
+    // High-performance Asynchronous Raw Reading API
+    using RawAsyncDataCallback = std::function<void(const RawSensorData& data)>;
+    bool startRawAsyncReading(double rate_hz, RawAsyncDataCallback callback);
+    void stopRawAsyncReading();
+
+    // Linux GPIO Hardware Interrupt (IRQ) Driven API
+    /// Start a background thread waiting for a GPIO hardware interrupt (INT pin rising edge).
+    /// Bypasses polling delays entirely.
+    /// @param gpio_pin Linux GPIO pin number connected to BNO055 INT pin (e.g. 24).
+    /// @param callback Callback executed the exact microsecond the hardware interrupt fires.
+    bool startInterruptDrivenReading(int gpio_pin, RawAsyncDataCallback callback);
+    void stopInterruptDrivenReading();
+
+    // Automatic Calibration load/save configuration
+    /// Configure automatic calibration files. If configured, calibration will be
+    /// loaded on begin(), and dynamically saved when the calibration status reaches maximum.
+    void enableAutoCalibration(std::string_view filepath);
+    void disableAutoCalibration();
 
 private:
     class Impl;
