@@ -23,11 +23,16 @@ template <typename T>
 inline void declare_common_parameters(T* node) {
     node->template declare_parameter<std::string>("device", "/dev/i2c-1");
     node->template declare_parameter<int>("address", 0x28);
+    node->template declare_parameter<std::string>("connection_type", "i2c");
+    node->template declare_parameter<std::string>("uart_port", "/dev/ttyUSB0");
+    node->template declare_parameter<int>("uart_baudrate", 115200);
+    node->template declare_parameter<double>("uart_timeout", 0.1);
     node->template declare_parameter<std::string>("frame_id", "imu_link");
     node->template declare_parameter<double>("publish_rate", 50.0);
     node->template declare_parameter<std::string>("qos_reliability", "best_effort");
     node->template declare_parameter<int>("qos_history_depth", 10);
     node->template declare_parameter<std::string>("calibration_file", "");
+    node->template declare_parameter<bool>("enable_auto_calibration", false);
     node->template declare_parameter<std::vector<double>>("orientation_covariance", std::vector<double>(9, 0.0));
     node->template declare_parameter<std::vector<double>>("angular_velocity_covariance", std::vector<double>(9, 0.0));
     node->template declare_parameter<std::vector<double>>("linear_acceleration_covariance",
@@ -38,6 +43,9 @@ inline void declare_common_parameters(T* node) {
     node->template declare_parameter<bool>("use_external_crystal", true);
     node->template declare_parameter<std::vector<double>>("magnetic_field_covariance", std::vector<double>(9, 0.0));
     node->template declare_parameter<double>("temperature_variance", 0.0);
+    // High-performance state estimator driver modes
+    node->template declare_parameter<std::string>("read_mode", "standard");  // "standard", "raw_async", "interrupt"
+    node->template declare_parameter<int>("interrupt_gpio_pin", 24);
 }
 
 // Redirect logger callback
