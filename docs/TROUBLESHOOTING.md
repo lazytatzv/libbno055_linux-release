@@ -21,6 +21,16 @@ Then log out and log back in.
    (The BNO055 supports up to 400kHz, but 10kHz to 50kHz is significantly more stable on the Raspberry Pi).
 2. Reboot the Pi.
 
+## Hardware Lockups or Unresponsive Sensor
+**Error**: `[Error] I2C read failed continuously` or no data is being published, even after Auto-Recovery kicks in.
+**Cause**: The BNO055 internal microcontroller occasionally crashes or permanently locks the I2C/UART bus when exposed to severe voltage spikes or EM interference.
+**Solution**:
+1. You can force a complete software hardware-reset without rebooting your computer by calling the `~/reset` service:
+   ```bash
+   ros2 service call /bno055_publisher_node/reset std_srvs/srv/Trigger
+   ```
+2. This invokes the `SYS_TRIGGER` register, power cycles the internal logic, and restores your previous operating mode.
+
 ## Sensor Calibration is Lost on Reboot
 **Error**: The heading (Yaw) drifts immediately after power-on.
 **Cause**: The BNO055 does not have internal non-volatile memory for calibration profiles. It loses its calibration every time it loses power.
