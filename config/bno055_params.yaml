@@ -3,12 +3,21 @@
 
 /**:
   ros__parameters:
+    # Connection Type: "i2c" (default) or "uart"
+    connection_type: "i2c"
+
+    # --- I2C Configuration (used if connection_type is "i2c") ---
     # Linux I2C device node (typically /dev/i2c-1 on Raspberry Pi)
     device: "/dev/i2c-1"
 
     # I2C Address of the BNO055 sensor (default is 0x28, which is 40 in decimal)
     # Use 0x29 (41 in decimal) if the ADR pin is pulled high.
     address: 40
+
+    # --- UART Configuration (used if connection_type is "uart") ---
+    uart_port: "/dev/ttyUSB0"
+    uart_baudrate: 115200
+    uart_timeout: 0.1
 
     # TF Frame ID to set in the header of the sensor_msgs/msg/Imu message
     frame_id: "imu_link"
