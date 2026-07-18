@@ -1,6 +1,6 @@
 # Advanced ROS 2 Integration Guide
 
-For robust robotics applications, simply dropping a sensor read into a `rclcpp::TimerBase` is insufficient. Hardware sensors can disconnect, drivers can crash, and I2C buses can lock up.
+For production robotics applications, simply dropping a sensor read into a `rclcpp::TimerBase` is insufficient. Hardware sensors can disconnect, drivers can crash, and I2C buses can lock up.
 
 This guide demonstrates how to integrate `libbno055-linux` using **ROS 2 Lifecycle Nodes (Managed Nodes)** and strict **Quality of Service (QoS)** profiles to build a truly fault-tolerant IMU driver.
 
@@ -148,7 +148,7 @@ When users run `rosdep install --from-paths src -y`, `rosdep` will automatically
 ## 4. Building and Running the ROS 2 Examples
 
 The library comes with two pre-built ROS 2 node implementations in the `src/ros2/` directory:
-- **`bno055_publisher_node`**: A high-performance standalone ROS 2 publisher node optimized for zero-copy intra-process communication.
+- **`bno055_publisher_node`**: A standalone ROS 2 publisher node optimized for zero-copy intra-process communication.
 - **`bno055_lifecycle_publisher_node`**: A managed LifecycleNode that supports state transitions and low-power hardware state mapping.
 
 ### 4.1. Prerequisites
@@ -234,7 +234,7 @@ ros2 topic echo /imu/data
 
 ## 5. Linux Kernel Tuning & Hardware Optimization Guide
 
-To extract maximum performance and achieve deterministic execution for state estimation filters (such as EKF), you must eliminate latencies at both the hardware (I2C/UART bus) and OS kernel (scheduler jitter) levels.
+To minimize latency and achieve deterministic execution for state estimation filters (such as EKF), you must eliminate latencies at both the hardware (I2C/UART bus) and OS kernel (scheduler jitter) levels.
 
 ### 5.1. Hardware Bus Speed Tuning
 
@@ -425,9 +425,9 @@ def generate_launch_description():
 
 ---
 
-## 8. High-Performance Read Modes & Hardware Wiring
+## 8. Advanced Read Modes & Hardware Wiring
 
-To enable the new high-performance features in standard C++ or ROS 2, you must select the appropriate `read_mode` parameter and configure the physical connections.
+To enable the new advanced features in standard C++ or ROS 2, you must select the appropriate `read_mode` parameter and configure the physical connections.
 
 ### 8.1. Comparison of Read Modes
 

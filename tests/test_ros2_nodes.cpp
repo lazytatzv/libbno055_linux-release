@@ -2,10 +2,10 @@
 #include <gtest/gtest.h>
 
 #include <chrono>
-#include <rclcpp/rclcpp.hpp>
-#include <rclcpp_lifecycle/lifecycle_node.hpp>
 #include <lifecycle_msgs/msg/state.hpp>
 #include <lifecycle_msgs/msg/transition.hpp>
+#include <rclcpp/rclcpp.hpp>
+#include <rclcpp_lifecycle/lifecycle_node.hpp>
 #include <sensor_msgs/msg/imu.hpp>
 #include <thread>
 
