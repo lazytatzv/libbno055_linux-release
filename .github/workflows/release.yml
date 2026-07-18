@@ -65,10 +65,27 @@ jobs:
           cpack -G DEB
           cpack -G TGZ
 
+      - name: Rename packages with OS suffix
+        run: |
+          cd build
+          for f in *.deb *.tar.gz; do
+            if [ -f "$f" ]; then
+              if [[ "$f" == *.tar.gz ]]; then
+                base="${f%.tar.gz}"
+                mv "$f" "${base}-${{ matrix.os }}.tar.gz"
+              else
+                base="${f%.*}"
+                ext="${f##*.}"
+                mv "$f" "${base}-${{ matrix.os }}.${ext}"
+              fi
+            fi
+          done
+
       - name: Upload packages to release
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ github.ref_name }}
           files: |
-            build/*.deb
-            build/*.tar.gz
+            build/*-${{ matrix.os }}.deb
+            build/*-${{ matrix.os }}.tar.gz
+
