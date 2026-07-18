@@ -1,24 +1,12 @@
-Source: libbno055-linux
+Source: ros-humble-libbno055-linux
+Section: misc
 Priority: optional
-Maintainer: lazytatzv <lazytatzv@users.noreply.github.com>
-Build-Depends: debhelper (>= 11), cmake, pkg-config
-Standards-Version: 4.5.0
-Section: libs
-Homepage: https://github.com/lazytatzv/libbno055-linux
+Maintainer: "lazytatzv" <lazytatzv@users.noreply.github.com>
+Build-Depends: debhelper (>= 9.0.0), cmake, ros-humble-ament-cmake-gtest <!nocheck>, ros-humble-diagnostic-msgs, ros-humble-rclcpp, ros-humble-rclcpp-lifecycle, ros-humble-sensor-msgs, ros-humble-std-srvs, ros-humble-ros-workspace
+Homepage: https://index.ros.org/p/libbno055_linux/#humble
+Standards-Version: 3.9.2
 
-Package: libbno055-linux-dev
-Section: libdevel
+Package: ros-humble-libbno055-linux
 Architecture: any
-Depends: libbno055-linux1 (= ${binary:Version}), ${misc:Depends}
-Description: Development files for libbno055-linux
- A thread-safe and dependency-free C++17 library for the
- BNO055 sensor over I2C on Linux. This package contains the headers
- and CMake configuration files required for development.
-
-Package: libbno055-linux1
-Architecture: any
-Depends: ${shlibs:Depends}, ${misc:Depends}
-Description: Shared library for libbno055-linux
- A thread-safe and dependency-free C++17 library for the
- BNO055 sensor over I2C on Linux. This package contains the compiled
- shared library.
+Depends: ${shlibs:Depends}, ${misc:Depends}, ros-humble-diagnostic-msgs, ros-humble-rclcpp, ros-humble-rclcpp-lifecycle, ros-humble-sensor-msgs, ros-humble-std-srvs, ros-humble-ros-workspace
+Description: C++17 BNO055 library and ROS 2 nodes for Linux.
