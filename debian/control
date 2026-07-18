@@ -11,7 +11,7 @@ Section: libdevel
 Architecture: any
 Depends: libbno055-linux1 (= ${binary:Version}), ${misc:Depends}
 Description: Development files for libbno055-linux
- A robust, thread-safe, and dependency-free C++17 library for the
+ A thread-safe and dependency-free C++17 library for the
  BNO055 sensor over I2C on Linux. This package contains the headers
  and CMake configuration files required for development.
 
@@ -19,6 +19,6 @@ Package: libbno055-linux1
 Architecture: any
 Depends: ${shlibs:Depends}, ${misc:Depends}
 Description: Shared library for libbno055-linux
- A robust, thread-safe, and dependency-free C++17 library for the
+ A thread-safe and dependency-free C++17 library for the
  BNO055 sensor over I2C on Linux. This package contains the compiled
  shared library.

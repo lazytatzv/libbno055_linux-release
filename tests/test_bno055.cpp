@@ -1,6 +1,8 @@
 #include <gtest/gtest.h>
 
 #include <cmath>
+#include <condition_variable>
+#include <mutex>
 
 #include "libbno055-linux/bno055.hpp"
 #include "libbno055-linux/mock_transport.hpp"
@@ -265,12 +267,14 @@ TEST_F(BNO055MockTest, EKFRawBurstReadingAndAsync) {
 
     ASSERT_TRUE(success);
 
-    std::unique_lock<std::mutex> lock(mtx);
-    cv.wait_for(lock, std::chrono::milliseconds(200), [&]() { return data_received; });
+    {
+        std::unique_lock<std::mutex> lock(mtx);
+        cv.wait_for(lock, std::chrono::milliseconds(200), [&]() { return data_received; });
 
-    EXPECT_TRUE(data_received);
-    EXPECT_NEAR(async_raw.accel.x, 1.0f, 1e-4);
-    EXPECT_NEAR(async_raw.mag.x, 1.0f, 1e-4);
+        EXPECT_TRUE(data_received);
+        EXPECT_NEAR(async_raw.accel.x, 1.0f, 1e-4);
+        EXPECT_NEAR(async_raw.mag.x, 1.0f, 1e-4);
+    }
 
     imu_->stopRawAsyncReading();
 
@@ -285,11 +289,13 @@ TEST_F(BNO055MockTest, EKFRawBurstReadingAndAsync) {
 
     ASSERT_TRUE(success);
 
-    std::unique_lock<std::mutex> lock2(mtx);
-    cv.wait_for(lock2, std::chrono::milliseconds(200), [&]() { return data_received; });
+    {
+        std::unique_lock<std::mutex> lock2(mtx);
+        cv.wait_for(lock2, std::chrono::milliseconds(200), [&]() { return data_received; });
 
-    EXPECT_TRUE(data_received);
-    EXPECT_NEAR(async_raw.accel.x, 1.0f, 1e-4);
+        EXPECT_TRUE(data_received);
+        EXPECT_NEAR(async_raw.accel.x, 1.0f, 1e-4);
+    }
 
     imu_->stopInterruptDrivenReading();
 }
@@ -304,17 +310,17 @@ TEST_F(BNO055MockTest, HardwareOverclockingInAMGMode) {
     bool gyro_overclocked = false;
 
     local_mock->setOnWrite([&](uint8_t reg, uint8_t value) {
-        if (reg == 0x07) {  // PAGE_ID
+        if (reg == 0x07) {  // PAGE_ID NOLINT(readability-magic-numbers)
             if (value == 1)
                 page1_selected = true;
             else if (value == 0)
                 page1_selected = false;
         }
         if (page1_selected) {
-            if (reg == 0x08 && value == 0x0F) {  // ACC_CONFIG
+            if (reg == 0x08 && value == 0x0F) {  // ACC_CONFIG NOLINT(readability-magic-numbers)
                 accel_overclocked = true;
             }
-            if (reg == 0x0A && value == 0x00) {  // GYR_CONFIG_0
+            if (reg == 0x0A && value == 0x00) {  // GYR_CONFIG_0 NOLINT(readability-magic-numbers)
                 gyro_overclocked = true;
             }
         }

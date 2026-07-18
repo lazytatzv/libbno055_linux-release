@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.10)
-project(libbno055_linux VERSION 1.4.1 LANGUAGES CXX)
+project(libbno055_linux VERSION 1.4.3 LANGUAGES CXX)
 
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -23,6 +23,11 @@ set_target_properties(libbno055-linux PROPERTIES
     VERSION ${PROJECT_VERSION}
     SOVERSION ${PROJECT_VERSION_MAJOR}
 )
+if(ENABLE_CLANG_TIDY AND CLANG_TIDY_EXE)
+    set_target_properties(libbno055-linux PROPERTIES
+        CXX_CLANG_TIDY "${CLANG_TIDY_EXE}"
+    )
+endif()
 
 # Include directories
 target_include_directories(libbno055-linux
@@ -41,7 +46,6 @@ option(ENABLE_CLANG_TIDY "Enable clang-tidy static analysis" ON)
 if(ENABLE_CLANG_TIDY)
     find_program(CLANG_TIDY_EXE NAMES "clang-tidy")
     if(CLANG_TIDY_EXE)
-        set(CMAKE_CXX_CLANG_TIDY "${CLANG_TIDY_EXE}")
         message(STATUS "clang-tidy enabled: ${CLANG_TIDY_EXE}")
     else()
         message(WARNING "clang-tidy not found, static analysis disabled.")
@@ -240,7 +244,7 @@ endif()
 # ---------------------------------------------------------
 set(CPACK_PACKAGE_NAME "libbno055-linux")
 set(CPACK_PACKAGE_VENDOR "lazytatzv")
-set(CPACK_PACKAGE_DESCRIPTION_SUMMARY "A robust C++17 library for the BNO055 sensor over I2C.")
+set(CPACK_PACKAGE_DESCRIPTION_SUMMARY "A C++17 library for the BNO055 sensor over I2C.")
 set(CPACK_PACKAGE_VERSION_MAJOR ${PROJECT_VERSION_MAJOR})
 set(CPACK_PACKAGE_VERSION_MINOR ${PROJECT_VERSION_MINOR})
 set(CPACK_PACKAGE_VERSION_PATCH ${PROJECT_VERSION_PATCH})

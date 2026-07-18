@@ -14,10 +14,10 @@
 #include <algorithm>
 #include <diagnostic_msgs/msg/diagnostic_array.hpp>
 #include <geometry_msgs/msg/vector3.hpp>
+#include <lifecycle_msgs/msg/state.hpp>
 #include <memory>
 #include <rclcpp/rclcpp.hpp>
 #include <rclcpp_lifecycle/lifecycle_node.hpp>
-#include <lifecycle_msgs/msg/state.hpp>
 #include <sensor_msgs/msg/imu.hpp>
 #include <sensor_msgs/msg/magnetic_field.hpp>
 #include <sensor_msgs/msg/temperature.hpp>
@@ -307,7 +307,7 @@ private:
         // Record timestamp immediately before I2C communication starts to minimize jitter
         auto stamp = this->now();
 
-        // High-performance noexcept reads
+        // Noexcept reads
         auto quat = imu_.getQuaternionNoexcept();
         auto gyro = imu_.getGyroscopeNoexcept();
         auto accel = imu_.getLinearAccelerationNoexcept();
