@@ -2,7 +2,7 @@
 <?xml-model href="http://download.ros.org/schema/package_format3.xsd" schematypens="http://www.w3.org/2001/XMLSchema"?>
 <package format="3">
   <name>libbno055_linux</name>
-  <version>1.4.1</version>
+  <version>1.4.3</version>
   <description>C++17 BNO055 library and ROS 2 nodes for Linux.</description>
   <maintainer email="lazytatzv@users.noreply.github.com">lazytatzv</maintainer>
   <license file="LICENSE">MIT</license>
