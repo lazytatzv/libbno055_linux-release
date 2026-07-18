@@ -145,12 +145,11 @@ public:
         int gpio_pin = this->get_parameter("interrupt_gpio_pin").as_int();
 
         if (read_mode == "raw_async") {
-            RCLCPP_INFO(this->get_logger(), "Starting in High-Performance RAW ASYNC Mode at %.1f Hz", rate_hz);
+            RCLCPP_INFO(this->get_logger(), "Starting in RAW ASYNC Mode at %.1f Hz", rate_hz);
             imu_->startRawAsyncReading(rate_hz,
                                        std::bind(&BNO055PublisherNode::raw_data_callback, this, std::placeholders::_1));
         } else if (read_mode == "interrupt") {
-            RCLCPP_INFO(this->get_logger(), "Starting in High-Performance HARDWARE INTERRUPT (IRQ) Mode on GPIO Pin %d",
-                        gpio_pin);
+            RCLCPP_INFO(this->get_logger(), "Starting in HARDWARE INTERRUPT (IRQ) Mode on GPIO Pin %d", gpio_pin);
             imu_->startInterruptDrivenReading(
                 gpio_pin, std::bind(&BNO055PublisherNode::raw_data_callback, this, std::placeholders::_1));
         } else {
