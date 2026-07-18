@@ -123,7 +123,7 @@ constexpr uint8_t POWER_MODE_SUSPEND = 0x02;
 
 class BNO055::Impl {
 public:
-    enum class ConnectionType { I2C, UART };
+    enum class ConnectionType : uint8_t { I2C, UART };
     ConnectionType conn_type_{ConnectionType::I2C};
     UARTConfig uart_config_;
     uint8_t address_;
@@ -216,7 +216,7 @@ public:
                     label = "[ERROR]";
                     break;
             }
-            std::cerr << "[bno055lib::BNO055] " << label << " " << msg << std::endl;
+            std::cerr << "[bno055lib::BNO055] " << label << " " << msg << '\n';
         }
     }
 
@@ -392,9 +392,9 @@ public:
             struct pollfd pfd = {i2c_fd, POLLIN, 0};
             int ret = poll(&pfd, 1, timeout_ms);
             if (ret > 0) {
-                int n = ::read(i2c_fd, buf + read_bytes, len - read_bytes);
+                ssize_t n = ::read(i2c_fd, buf + read_bytes, len - read_bytes);
                 if (n > 0) {
-                    read_bytes += n;
+                    read_bytes += static_cast<int>(n);
                 } else {
                     return false;
                 }
@@ -518,7 +518,7 @@ public:
     }
 
     // Thread-safe methods with automatic reconnect and retries
-    bool write8(uint8_t reg, uint8_t value, int retries = 3) {
+    bool write8(uint8_t reg, uint8_t value, int retries = 3) {  // NOLINT(bugprone-easily-swappable-parameters)
         for (int i = 0; i < retries; ++i) {
             {
                 std::lock_guard<std::mutex> lock(mutex_);
@@ -548,7 +548,8 @@ public:
         return false;
     }
 
-    bool writeLen(uint8_t reg, const uint8_t* buffer, uint8_t len, int retries = 3) {
+    bool writeLen(uint8_t reg, const uint8_t* buffer, uint8_t len,
+                  int retries = 3) {  // NOLINT(bugprone-easily-swappable-parameters)
         if (len > 31) return false;
         for (int i = 0; i < retries; ++i) {
             {
@@ -609,7 +610,8 @@ public:
         return false;
     }
 
-    bool readLen(uint8_t reg, uint8_t* buffer, uint8_t len, int retries = 3) {
+    bool readLen(uint8_t reg, uint8_t* buffer, uint8_t len,
+                 int retries = 3) {  // NOLINT(bugprone-easily-swappable-parameters)
         for (int i = 0; i < retries; ++i) {
             {
                 std::lock_guard<std::mutex> lock(mutex_);
@@ -1268,7 +1270,7 @@ bool BNO055::startRawAsyncReading(double rate_hz, RawAsyncDataCallback callback)
     impl_->raw_async_running_ = true;
 
     impl_->raw_async_thread_ = std::thread([this]() {
-        impl_->log(LogLevel::Info, "Starting background high-performance raw async reading thread...");
+        impl_->log(LogLevel::Info, "Starting background raw async reading thread...");
         const auto period = std::chrono::microseconds(static_cast<int64_t>(1000000.0 / impl_->raw_async_rate_hz_));
 
         while (impl_->raw_async_running_) {
@@ -1322,19 +1324,19 @@ bool BNO055::startInterruptDrivenReading(int gpio_pin, RawAsyncDataCallback call
     impl_->irq_callback_ = std::move(callback);
     impl_->irq_running_ = true;
 
-    impl_->irq_thread_ = std::thread([this]() {
+    impl_->irq_thread_ = std::thread([this]() {  // NOLINT(readability-function-cognitive-complexity)
         impl_->log(LogLevel::Info, "Starting background hardware interrupt (IRQ) waiting thread...");
 
         // Mock setup on non-linux systems to let GTest units verify callback triggering
         bool is_mock = true;
 #ifdef __linux__
-        is_mock = (impl_->i2c_fd == 999 && impl_->transport_ != nullptr);
+        is_mock = (impl_->i2c_fd == 999 && impl_->transport_ != nullptr);  // NOLINT(readability-magic-numbers)
 #endif
 
         if (is_mock) {
             // Emulate periodic interrupts for unit testing
             while (impl_->irq_running_) {
-                std::this_thread::sleep_for(std::chrono::milliseconds(10));
+                std::this_thread::sleep_for(std::chrono::milliseconds(10));  // NOLINT(readability-magic-numbers)
                 auto raw_opt = getRawSensorDataNoexcept();
                 if (raw_opt && impl_->irq_callback_ && impl_->irq_running_) {
                     impl_->irq_callback_(*raw_opt);
@@ -1352,7 +1354,7 @@ bool BNO055::startInterruptDrivenReading(int gpio_pin, RawAsyncDataCallback call
             export_file << pin_str;
             export_file.close();
             // Wait for system to create sysfs directory node
-            std::this_thread::sleep_for(std::chrono::milliseconds(100));
+            std::this_thread::sleep_for(std::chrono::milliseconds(100));  // NOLINT(readability-magic-numbers)
         }
 
         // 2. Set direction to 'in'
@@ -1382,7 +1384,9 @@ bool BNO055::startInterruptDrivenReading(int gpio_pin, RawAsyncDataCallback call
 
         // Clear initial state
         char dummy;
-        (void)::read(val_fd, &dummy, 1);
+        if (::read(val_fd, &dummy, 1) < 0) {  // NOLINT(readability-magic-numbers)
+            // Ignore error
+        }
 
         struct pollfd pfd;
         pfd.fd = val_fd;
@@ -1390,12 +1394,14 @@ bool BNO055::startInterruptDrivenReading(int gpio_pin, RawAsyncDataCallback call
 
         while (impl_->irq_running_) {
             // Wait for edge interrupt event with a 100ms timeout to periodically check if stopped
-            int num_events = ::poll(&pfd, 1, 100);
+            int num_events = ::poll(&pfd, 1, 100);  // NOLINT(readability-magic-numbers)
             if (num_events > 0) {
                 if (pfd.revents & POLLPRI) {
                     // Seek back to start to clear interrupt flag
                     ::lseek(val_fd, 0, SEEK_SET);
-                    (void)::read(val_fd, &dummy, 1);
+                    if (::read(val_fd, &dummy, 1) < 0) {  // NOLINT(readability-magic-numbers)
+                        // Ignore error
+                    }
 
                     // Execute burst read Immediately on interrupt
                     auto raw_opt = getRawSensorDataNoexcept();

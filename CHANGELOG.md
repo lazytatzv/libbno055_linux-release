@@ -13,6 +13,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Fixed
 - Fixed compilation errors in `BNO055LifecyclePublisherNode` (incorrect logger call in `on_deactivate` and private destructor).
 - Explicitly included `lifecycle_msgs` headers (`state.hpp` and `transition.hpp`) to fix compilation on ROS 2 Jazzy.
+- Fixed missing standard library headers (`<mutex>`, `<condition_variable>`, `<algorithm>`) in `benchmark_imu` example.
+- Fixed a recursive double-acquisition deadlock in `BNO055MockTest.EKFRawBurstReadingAndAsync` unit test.
+- Fixed GitHub Actions release asset upload conflicts in release matrix jobs by appending OS suffixes to package names.
+- Optimized `clang-tidy` target properties to selectively run checks only on the core library.
 
 ## [1.4.0] - 2026-07-16
 
