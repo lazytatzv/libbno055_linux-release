@@ -43,7 +43,7 @@ inline void declare_common_parameters(T* node) {
     node->template declare_parameter<bool>("use_external_crystal", true);
     node->template declare_parameter<std::vector<double>>("magnetic_field_covariance", std::vector<double>(9, 0.0));
     node->template declare_parameter<double>("temperature_variance", 0.0);
-    // High-performance state estimator driver modes
+    // Advanced driver modes
     node->template declare_parameter<std::string>("read_mode", "standard");  // "standard", "raw_async", "interrupt"
     node->template declare_parameter<int>("interrupt_gpio_pin", 24);
 }

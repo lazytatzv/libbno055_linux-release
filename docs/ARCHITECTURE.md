@@ -47,7 +47,7 @@ If you inspect `include/libbno055-linux/bno055.hpp`, you will not find any Linux
 The Bosch BNO055 has a known hardware quirk: it heavily utilizes **I2C clock stretching** while its internal Cortex-M0 processor computes sensor fusion math. Many Linux single-board computers (specifically the Broadcom SoC on the Raspberry Pi) possess a silicon bug that fails to handle prolonged clock stretching, causing the I2C bus to physically lock up and return `EIO` (Input/Output Error) to the kernel driver.
 
 ### The Self-Healing State Machine
-To combat this, `libbno055-linux` implements a robust self-healing state machine. When the kernel reports an I2C timeout or physical disconnect, the library does not crash.
+To combat this, `libbno055-linux` implements a self-healing state machine. When the kernel reports an I2C timeout or physical disconnect, the library does not crash.
 
 ```mermaid
 stateDiagram-v2
@@ -104,7 +104,7 @@ To decouple the library from the underlying Linux kernel file descriptors and ha
 
 For robotics and high-frequency control loops executing on embedded Linux platforms (e.g., Raspberry Pi, BeagleBone ARM cores), floating-point math throughput is critical.
 * **Single vs. Double Precision**: Previous architectures utilized `double` (64-bit) for physical variables. However, ARM microcontrollers and application processors feature dedicated single-precision Hardware FPUs.
-* **Performance Enhancements**: All physical coordinates (`Vector3`), orientations (`Quaternion`), scale conversion factors, and Euler calculations (`toEulerDegrees`) are modified to use `float` (32-bit) type signatures.
+* **Math Optimizations**: All physical coordinates (`Vector3`), orientations (`Quaternion`), scale conversion factors, and Euler calculations (`toEulerDegrees`) are modified to use `float` (32-bit) type signatures.
 * **Result**: Enables vectorization optimization and lowers CPU cycle consumption during raw IMU parsing and rotation conversions.
 
 ---
