@@ -142,3 +142,33 @@ stateDiagram-v2
 
 * **Power Efficiency (Suspend Mode)**: In the `Inactive` state (before activation or after deactivation), the node puts the BNO055 sensor into low-power **Suspend Mode** and pauses the high-rate publishing timer. The sensor only wakes up to **Normal Mode** when transitioned to the `Active` state.
 * **Deterministic Initialization**: Avoids racing conditions in robot startup by letting the coordinator configure and test I2C connectivity before active streaming starts.
+
+---
+
+## 9. Multi-Language Binding Architecture
+
+To support modern polyglot robotics stacks, `libbno055-linux` implements a layered binding architecture:
+
+```mermaid
+flowchart TD
+    subgraph Core C++ Engine
+        CPP["C++17 BNO055 Core (bno055lib::BNO055)"]
+    end
+    
+    subgraph Language Interfaces
+        C_API["C ABI Layer (bno055_c.h / bno055_c.cpp)"]
+        PY_BIND["Pybind11 C-Extension (import libbno055)"]
+        RUST_CRATE["Safe Rust Crate (use libbno055)"]
+        ROS2_NODES["ROS 2 C++ / Python Nodes"]
+    end
+    
+    CPP --> C_API
+    CPP --> PY_BIND
+    C_API --> RUST_CRATE
+    CPP --> ROS2_NODES
+```
+
+* **C ABI Layer (`bno055_c.h`)**: Provides opaque `bno055_handle_t` pointers and pure C structs (`bno055_vector3_t`, `bno055_quaternion_t`), allowing C, Rust, Go, Zig, and FFI wrappers to interoperate with zero memory overhead.
+* **Pybind11 C-Extension (`import libbno055`)**: Exposes native C++ classes to Python with zero GIL blocking during sensor readouts.
+* **Safe Rust Crate (`use libbno055`)**: Wraps C ABI calls behind safe Rust idioms, automatic `Drop` RAII cleanup, and `Send` thread safety guarantees.
+
