@@ -22,9 +22,17 @@ Before releasing, you must increment the version number in all package managers 
    ```python
    version = "X.Y.Z"
    ```
-5. **Update `CHANGELOG.md`**:
+5. **Update `setup.py`**:
+   ```python
+   version="X.Y.Z"
+   ```
+6. **Update `rust/Cargo.toml`**:
+   ```toml
+   version = "X.Y.Z"
+   ```
+7. **Update `CHANGELOG.md`**:
    Add a new section for `## [X.Y.Z] - YYYY-MM-DD` detailing the changes.
-6. **Update `debian/changelog`**:
+8. **Update `debian/changelog`**:
    ```bash
    dch -v X.Y.Z-1 "Release version X.Y.Z"
    ```
@@ -57,6 +65,11 @@ bloom-release --rosdistro humble --track humble libbno055_linux
 bloom-release --rosdistro jazzy --track jazzy libbno055_linux
 ```
 
+### Releasing for Kilted
+```bash
+bloom-release --rosdistro kilted --track kilted libbno055_linux
+```
+
 *Note: If `bloom` warns that a pull request already exists, ensure you delete the previous `bloom-libbno055_linux-X` branch from your GitHub fork of `rosdistro` before running.*
 
 ---
@@ -83,3 +96,21 @@ To distribute the pure C++ library to non-ROS users via `apt`, upload the source
    ```
 
 Launchpad will then build the `.deb` files for various architectures in the cloud and publish them to your PPA.
+
+---
+
+## 4. Automated `crates.io` Release (via GitHub Actions)
+
+Pushing a Git tag matching `v*` (e.g. `git push origin v1.5.0`) triggers the automated release workflow in `.github/workflows/release.yml`.
+
+**Prerequisites**:
+1. Obtain an API Token from [crates.io](https://crates.io/settings/tokens).
+2. Store the token as a GitHub Secret in your repository:
+   - Go to **Settings ➔ Secrets and variables ➔ Actions**
+   - Add a New repository secret named **`CRATES_IO_TOKEN`**
+
+Once set up, whenever a tag is pushed:
+* GitHub Release will be automatically generated with release notes.
+* CPack `.deb` and `.tar.gz` packages will be built and attached.
+* The `libbno055` Rust crate will be automatically published to `crates.io`.
+
