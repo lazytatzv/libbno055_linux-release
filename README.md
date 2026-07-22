@@ -1,3 +1,26 @@
+## libbno055_linux (humble) - 1.7.1-1
+
+The packages in the `libbno055_linux` repository were released into the `humble` distro by running `/home/yano/libbno055-linux/.venv/bin/bloom-release libbno055_linux --rosdistro humble --track humble` on `Wed, 22 Jul 2026 09:25:00 -0000`
+
+The `libbno055_linux` package was released.
+
+Version of package(s) in repository `libbno055_linux`:
+
+- upstream repository: git@github.com:lazytatzv/bno055lib.git
+- release repository: https://github.com/lazytatzv/libbno055_linux-release.git
+- rosdistro version: `1.4.3-1`
+- old version: `1.4.3-1`
+- new version: `1.7.1-1`
+
+Versions of tools used:
+
+- bloom version: `0.14.3`
+- catkin_pkg version: `1.1.0`
+- rosdep version: `0.26.0`
+- rosdistro version: `1.0.1`
+- vcstools version: `0.1.42`
+
+
 ## libbno055_linux (kilted) - 1.4.3-1
 
 The packages in the `libbno055_linux` repository were released into the `kilted` distro by running `/home/tatsv/libbno055-linux/.venv/bin/bloom-release --rosdistro kilted --track kilted libbno055_linux` on `Sat, 18 Jul 2026 01:18:36 -0000`
