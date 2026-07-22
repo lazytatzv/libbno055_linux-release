@@ -1,3 +1,51 @@
+libbno055-linux (1.5.6-1) jammy; urgency=medium
+
+  * Setup automated PyPI publishing via CI and include headers in sdist
+
+ -- Tatsuki Yano <lazytatzv@users.noreply.github.com>  Wed, 22 Jul 2026 05:42:00 +0900
+
+libbno055-linux (1.5.4-1) jammy; urgency=medium
+
+  * Add Highlights & Comparison Table to README, customize rust/README.md for crates.io.
+
+ -- lazytatzv <lazytatzv@users.noreply.github.com>  Tue, 21 Jul 2026 15:40:00 +0900
+
+libbno055-linux (1.5.3-1) jammy; urgency=medium
+
+  * Add Python, Ubuntu, and Coverage badges to README.
+
+ -- lazytatzv <lazytatzv@users.noreply.github.com>  Tue, 21 Jul 2026 15:38:00 +0900
+
+libbno055-linux (1.5.2-1) jammy; urgency=medium
+
+  * Add Section 10 Rust Integration Guide to INTEGRATION.md.
+
+ -- lazytatzv <lazytatzv@users.noreply.github.com>  Tue, 21 Jul 2026 15:27:00 +0900
+
+libbno055-linux (1.5.1-1) jammy; urgency=medium
+
+  * Update Rust README documentation for crates.io publishing.
+
+ -- lazytatzv <lazytatzv@users.noreply.github.com>  Tue, 21 Jul 2026 15:23:00 +0900
+
+libbno055-linux (1.5.0-1) jammy; urgency=medium
+
+  * Add native C API, Pybind11 Python bindings, and safe Rust crate bindings.
+
+ -- lazytatzv <lazytatzv@users.noreply.github.com>  Tue, 21 Jul 2026 15:15:00 +0900
+
+libbno055-linux (1.4.3-1) jammy; urgency=medium
+
+  * Remove unused use_interrupt variable.
+
+ -- lazytatzv <lazytatzv@users.noreply.github.com>  Sat, 18 Jul 2026 10:13:00 +0900
+
+libbno055-linux (1.4.2-1) jammy; urgency=medium
+
+  * Resolve unused return value warnings and add missing headers.
+
+ -- lazytatzv <lazytatzv@users.noreply.github.com>  Sat, 18 Jul 2026 10:05:00 +0900
+
 libbno055-linux (1.4.1-1) jammy; urgency=medium
 
   * Fix lifecycle node build errors, add benchmark utility.
