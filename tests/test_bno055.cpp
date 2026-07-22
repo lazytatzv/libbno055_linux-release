@@ -333,3 +333,21 @@ TEST_F(BNO055MockTest, HardwareOverclockingInAMGMode) {
     EXPECT_TRUE(accel_overclocked);
     EXPECT_TRUE(gyro_overclocked);
 }
+
+#include "libbno055-linux/bno055_c.h"
+
+TEST(BNO055CAPITest, HandlesAndUtilities) {
+    bno055_handle_t handle = bno055_create_i2c(0x28, "mock_device");
+    ASSERT_NE(handle, nullptr);
+
+    // Begin IMU in NDOF mode
+    bno055_begin(handle, BNO055_OPMODE_NDOF);
+
+    bno055_quaternion_t q = {1.0f, 0.0f, 0.0f, 0.0f};
+    bno055_vector3_t euler = bno055_to_euler_degrees(&q);
+    EXPECT_FLOAT_EQ(euler.x, 0.0f);
+    EXPECT_FLOAT_EQ(euler.y, 0.0f);
+    EXPECT_FLOAT_EQ(euler.z, 0.0f);
+
+    bno055_destroy(handle);
+}
