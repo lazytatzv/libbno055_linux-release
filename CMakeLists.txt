@@ -1,17 +1,20 @@
 cmake_minimum_required(VERSION 3.10)
-project(libbno055_linux VERSION 1.4.3 LANGUAGES CXX)
+project(libbno055_linux VERSION 1.7.1 LANGUAGES CXX C)
 
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
 # Source files
 set(SOURCES
-    src/bno055.cpp
+    src/core/bno055.cpp
+    src/core/bno055_c.cpp
 )
 
 # Header files
 set(HEADERS
     include/libbno055-linux/bno055.hpp
+    include/libbno055-linux/bno055_c.h
+    include/libbno055-linux/controllers/heading_controller.hpp
 )
 
 # Add library
@@ -60,27 +63,55 @@ target_link_libraries(libbno055-linux PRIVATE Threads::Threads)
 option(BUILD_EXAMPLES "Build example executables" ON)
 
 if(BUILD_EXAMPLES)
-    add_executable(calibrate_imu examples/calibrate.cpp)
+    add_executable(calibrate_imu examples/cpp/calibrate.cpp)
     target_link_libraries(calibrate_imu PRIVATE libbno055-linux)
 
-    add_executable(read_data_noexcept examples/read_data_noexcept.cpp)
+    add_executable(read_data_noexcept examples/cpp/read_data_noexcept.cpp)
     target_link_libraries(read_data_noexcept PRIVATE libbno055-linux)
 
-    add_executable(read_all_data examples/read_all_data.cpp)
+    add_executable(read_all_data examples/cpp/read_all_data.cpp)
     target_link_libraries(read_all_data PRIVATE libbno055-linux)
 
-    add_executable(benchmark_imu examples/benchmark_imu.cpp)
+    add_executable(benchmark_imu examples/cpp/benchmark_imu.cpp)
     target_link_libraries(benchmark_imu PRIVATE libbno055-linux)
+
+    add_executable(heading_control_demo examples/cpp/heading_control_demo.cpp)
+    target_link_libraries(heading_control_demo PRIVATE libbno055-linux)
+
+    add_executable(c_demo examples/c/c_demo.c)
+    target_link_libraries(c_demo PRIVATE libbno055-linux)
+endif()
+
+# Python Bindings (pybind11)
+option(BUILD_PYTHON_BINDINGS "Build Python bindings using pybind11" ON)
+if(BUILD_PYTHON_BINDINGS)
+    find_package(pybind11 QUIET)
+    if(NOT pybind11_FOUND)
+        message(STATUS "pybind11 not found locally. Fetching pybind11 from GitHub...")
+        include(FetchContent)
+        FetchContent_Declare(
+            pybind11
+            GIT_REPOSITORY https://github.com/pybind/pybind11.git
+            GIT_TAG        v2.12.0
+        )
+        FetchContent_MakeAvailable(pybind11)
+    endif()
+
+    pybind11_add_module(libbno055_py src/python/bindings.cpp)
+    target_link_libraries(libbno055_py PRIVATE libbno055-linux)
+    set_target_properties(libbno055_py PROPERTIES OUTPUT_NAME "libbno055")
 endif()
 
 # Optional ROS 2 integration (conditional build of ROS 2 publisher samples)
 find_package(rclcpp QUIET)
+find_package(rclcpp_components QUIET)
 find_package(rclcpp_lifecycle QUIET)
 find_package(sensor_msgs QUIET)
+find_package(geometry_msgs QUIET)
 find_package(diagnostic_msgs QUIET)
 find_package(std_srvs QUIET)
 
-if(rclcpp_FOUND AND sensor_msgs_FOUND AND diagnostic_msgs_FOUND AND std_srvs_FOUND)
+if(rclcpp_FOUND AND sensor_msgs_FOUND AND geometry_msgs_FOUND AND diagnostic_msgs_FOUND AND std_srvs_FOUND)
     find_package(ament_cmake REQUIRED)
     set(ament_cmake_copyright_FOUND TRUE)
     set(ament_cmake_cpplint_FOUND TRUE)
@@ -88,25 +119,77 @@ if(rclcpp_FOUND AND sensor_msgs_FOUND AND diagnostic_msgs_FOUND AND std_srvs_FOU
     set(ament_cmake_pep257_FOUND TRUE)
     set(ament_cmake_xmllint_FOUND TRUE)
     set(ament_cmake_flake8_FOUND TRUE)
-    message(STATUS "ROS 2 environment detected. Building ROS 2 publisher node sample.")
+    message(STATUS "ROS 2 environment detected. Building ROS 2 publisher and control node samples.")
+    
+    # --- 1. Standalone Executable (Publisher & Heading Control) ---
     add_executable(bno055_publisher_node src/ros2/ros2_publisher_node.cpp)
     target_link_libraries(bno055_publisher_node libbno055-linux)
     ament_target_dependencies(bno055_publisher_node rclcpp sensor_msgs diagnostic_msgs std_srvs)
 
-    install(TARGETS bno055_publisher_node
+    add_executable(bno055_heading_control_node src/ros2/ros2_heading_control_node.cpp)
+    target_link_libraries(bno055_heading_control_node libbno055-linux)
+    ament_target_dependencies(bno055_heading_control_node rclcpp rclcpp_components sensor_msgs geometry_msgs diagnostic_msgs std_srvs)
+
+    install(TARGETS bno055_publisher_node bno055_heading_control_node
         DESTINATION lib/${PROJECT_NAME}
     )
 
+    # --- 2. Composable Node Shared Library (Publisher & Heading Control) ---
+    if(rclcpp_components_FOUND)
+        message(STATUS "rclcpp_components detected. Building Composable Node libraries.")
+        add_library(bno055_ros2_components SHARED src/ros2/ros2_publisher_node.cpp)
+        target_compile_definitions(bno055_ros2_components PRIVATE BNO055_ROS2_BUILDING_COMPONENT)
+        target_link_libraries(bno055_ros2_components libbno055-linux)
+        ament_target_dependencies(bno055_ros2_components rclcpp rclcpp_components sensor_msgs diagnostic_msgs std_srvs)
+        rclcpp_components_register_node(bno055_ros2_components PLUGIN "bno055_ros2::BNO055PublisherNode" EXECUTABLE bno055_publisher_node_container)
+
+        add_library(bno055_heading_control_components SHARED src/ros2/ros2_heading_control_node.cpp)
+        target_link_libraries(bno055_heading_control_components libbno055-linux)
+        ament_target_dependencies(bno055_heading_control_components rclcpp rclcpp_components sensor_msgs geometry_msgs diagnostic_msgs std_srvs)
+        rclcpp_components_register_node(bno055_heading_control_components PLUGIN "bno055_ros2::BNO055HeadingControlNode" EXECUTABLE bno055_heading_control_container)
+
+        install(TARGETS bno055_ros2_components bno055_heading_control_components
+            ARCHIVE DESTINATION lib
+            LIBRARY DESTINATION lib
+            RUNTIME DESTINATION bin
+        )
+    endif()
+
     if(rclcpp_lifecycle_FOUND)
         message(STATUS "ROS 2 Lifecycle detected. Building Lifecycle Node sample.")
-        # Lifecycle Node (Managed Node)
+        # --- 3. Standalone Executable (Lifecycle) ---
         add_executable(bno055_lifecycle_publisher_node src/ros2/ros2_lifecycle_publisher_node.cpp)
         target_link_libraries(bno055_lifecycle_publisher_node libbno055-linux)
         ament_target_dependencies(bno055_lifecycle_publisher_node rclcpp rclcpp_lifecycle sensor_msgs diagnostic_msgs std_srvs)
 
-        install(TARGETS bno055_lifecycle_publisher_node
+        add_executable(bno055_lifecycle_heading_control_node src/ros2/ros2_lifecycle_heading_control_node.cpp)
+        target_link_libraries(bno055_lifecycle_heading_control_node libbno055-linux)
+        ament_target_dependencies(bno055_lifecycle_heading_control_node rclcpp rclcpp_lifecycle rclcpp_components sensor_msgs geometry_msgs diagnostic_msgs std_srvs)
+
+        install(TARGETS bno055_lifecycle_publisher_node bno055_lifecycle_heading_control_node
             DESTINATION lib/${PROJECT_NAME}
         )
+
+        # --- 4. Composable Node Shared Library (Lifecycle) ---
+        if(rclcpp_components_FOUND)
+            message(STATUS "Building Lifecycle Composable Node library.")
+            add_library(bno055_ros2_lifecycle_components SHARED src/ros2/ros2_lifecycle_publisher_node.cpp)
+            target_compile_definitions(bno055_ros2_lifecycle_components PRIVATE BNO055_ROS2_BUILDING_COMPONENT)
+            target_link_libraries(bno055_ros2_lifecycle_components libbno055-linux)
+            ament_target_dependencies(bno055_ros2_lifecycle_components rclcpp rclcpp_lifecycle rclcpp_components sensor_msgs diagnostic_msgs std_srvs)
+            rclcpp_components_register_node(bno055_ros2_lifecycle_components PLUGIN "bno055_ros2::BNO055LifecyclePublisherNode" EXECUTABLE bno055_lifecycle_publisher_node_container)
+
+            add_library(bno055_lifecycle_heading_control_components SHARED src/ros2/ros2_lifecycle_heading_control_node.cpp)
+            target_link_libraries(bno055_lifecycle_heading_control_components libbno055-linux)
+            ament_target_dependencies(bno055_lifecycle_heading_control_components rclcpp rclcpp_lifecycle rclcpp_components sensor_msgs geometry_msgs diagnostic_msgs std_srvs)
+            rclcpp_components_register_node(bno055_lifecycle_heading_control_components PLUGIN "bno055_ros2::BNO055LifecycleHeadingControlNode" EXECUTABLE bno055_lifecycle_heading_control_container)
+
+            install(TARGETS bno055_ros2_lifecycle_components bno055_lifecycle_heading_control_components
+                ARCHIVE DESTINATION lib
+                LIBRARY DESTINATION lib
+                RUNTIME DESTINATION bin
+            )
+        endif()
     endif()
 
     # Install ROS 2 configuration and launch files
@@ -132,7 +215,7 @@ install(TARGETS libbno055-linux
 )
 
 if(BUILD_EXAMPLES)
-    install(TARGETS calibrate_imu read_data_noexcept read_all_data benchmark_imu
+    install(TARGETS calibrate_imu read_data_noexcept read_all_data benchmark_imu heading_control_demo c_demo
         RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR}
     )
 endif()
@@ -198,6 +281,7 @@ if(BUILD_TESTING AND NOT rclcpp_FOUND)
 
     add_executable(libbno055-linux_tests
         tests/test_bno055.cpp
+        tests/test_heading_controller.cpp
     )
 
     if(TARGET GTest::gtest_main)
