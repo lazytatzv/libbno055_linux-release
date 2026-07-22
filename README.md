@@ -1,3 +1,26 @@
+## libbno055_linux (kilted) - 1.7.1-1
+
+The packages in the `libbno055_linux` repository were released into the `kilted` distro by running `/home/yano/libbno055-linux/.venv/bin/bloom-release libbno055_linux --rosdistro kilted --track kilted` on `Wed, 22 Jul 2026 09:27:30 -0000`
+
+The `libbno055_linux` package was released.
+
+Version of package(s) in repository `libbno055_linux`:
+
+- upstream repository: https://github.com/lazytatzv/libbno055-linux.git
+- release repository: https://github.com/lazytatzv/libbno055_linux-release.git
+- rosdistro version: `1.4.3-1`
+- old version: `1.4.3-1`
+- new version: `1.7.1-1`
+
+Versions of tools used:
+
+- bloom version: `0.14.3`
+- catkin_pkg version: `1.1.0`
+- rosdep version: `0.26.0`
+- rosdistro version: `1.0.1`
+- vcstools version: `0.1.42`
+
+
 ## libbno055_linux (jazzy) - 1.7.1-1
 
 The packages in the `libbno055_linux` repository were released into the `jazzy` distro by running `/home/yano/libbno055-linux/.venv/bin/bloom-release libbno055_linux --rosdistro jazzy --track jazzy` on `Wed, 22 Jul 2026 09:26:20 -0000`
