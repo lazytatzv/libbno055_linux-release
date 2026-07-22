@@ -4,11 +4,14 @@
 #include <poll.h>
 #include <sys/ioctl.h>
 #include <termios.h>
+#include <unistd.h>
 
 #include "libbno055-linux/transport.hpp"
 
 #ifdef __linux__
 #include <linux/i2c-dev.h>
+#include <linux/i2c.h>
+#include <linux/serial.h>
 #endif
 #include <unistd.h>
 
@@ -27,7 +30,8 @@ namespace bno055lib {
 namespace {
 
 inline int16_t read16_le(const uint8_t* buf) noexcept {
-    return static_cast<int16_t>(buf[0] | (buf[1] << 8));
+    // Cast to uint16_t before shifting to prevent signed integer overflow (C++ integer promotion).
+    return static_cast<int16_t>(static_cast<uint16_t>(buf[0]) | (static_cast<uint16_t>(buf[1]) << 8));
 }
 
 inline bno055lib::Vector3 parseVector3(const uint8_t* buffer, float scale) noexcept {
@@ -264,6 +268,18 @@ public:
                 i2c_fd = -1;
                 return false;
             }
+
+            if (uart_config_.low_latency) {
+                struct serial_struct serial;
+                if (ioctl(i2c_fd, TIOCGSERIAL, &serial) == 0) {
+                    serial.flags |= ASYNC_LOW_LATENCY;
+                    ioctl(i2c_fd, TIOCSSERIAL, &serial);
+                    log(LogLevel::Info, "UART Low Latency mode enabled via TIOCSSERIAL.");
+                } else {
+                    log(LogLevel::Warning, "Failed to enable UART Low Latency mode (TIOCGSERIAL failed).");
+                }
+            }
+
             return true;
         }
 
@@ -474,9 +490,20 @@ public:
             }
             return false;
         }
+        struct i2c_msg msgs[2];
         uint8_t reg_buf[1] = {reg};
-        if (::write(i2c_fd, reg_buf, 1) != 1) return false;
-        return ::read(i2c_fd, &value, 1) == 1;
+        msgs[0].addr = address_;
+        msgs[0].flags = 0;
+        msgs[0].len = 1;
+        msgs[0].buf = reg_buf;
+        msgs[1].addr = address_;
+        msgs[1].flags = I2C_M_RD;
+        msgs[1].len = 1;
+        msgs[1].buf = &value;
+        struct i2c_rdwr_ioctl_data msgset;
+        msgset.msgs = msgs;
+        msgset.nmsgs = 2;
+        return ioctl(i2c_fd, I2C_RDWR, &msgset) >= 0;
 #else
         if (reg == CHIP_ID) {
             value = BNO055_ID;
@@ -503,9 +530,20 @@ public:
             }
             return false;
         }
+        struct i2c_msg msgs[2];
         uint8_t reg_buf[1] = {reg};
-        if (::write(i2c_fd, reg_buf, 1) != 1) return false;
-        return ::read(i2c_fd, buffer, len) == len;
+        msgs[0].addr = address_;
+        msgs[0].flags = 0;
+        msgs[0].len = 1;
+        msgs[0].buf = reg_buf;
+        msgs[1].addr = address_;
+        msgs[1].flags = I2C_M_RD;
+        msgs[1].len = len;
+        msgs[1].buf = buffer;
+        struct i2c_rdwr_ioctl_data msgset;
+        msgset.msgs = msgs;
+        msgset.nmsgs = 2;
+        return ioctl(i2c_fd, I2C_RDWR, &msgset) >= 0;
 #else
         std::memset(buffer, 0, len);
         if (reg == 0x20 && len >= 8) {  // QUATERNION_DATA_W_LSB
@@ -717,12 +755,9 @@ bool BNO055::begin(OpMode mode) {
     impl_->write8(SYS_TRIGGER, 0x0);
     std::this_thread::sleep_for(std::chrono::milliseconds(10));
 
-    // Set Operating Mode
-    setMode(mode);
-    std::this_thread::sleep_for(std::chrono::milliseconds(20));
-
     // Hardware Overclocking for EKF/AMG Mode:
     // If the sensor is set to raw sensor mode (AMG), configure sub-sensors to maximum physical limits.
+    // MUST be done in CONFIG mode before calling setMode!
     if (mode == OpMode::AMG) {
         impl_->log(LogLevel::Info, "Overclocking physical sub-sensors: Accel -> 1kHz ODR, Gyro -> 2kHz ODR");
         // Open Page 1 config space
@@ -745,6 +780,10 @@ bool BNO055::begin(OpMode mode) {
         impl_->write8(PAGE_ID, 0);
         std::this_thread::sleep_for(std::chrono::milliseconds(10));
     }
+
+    // Set Operating Mode
+    setMode(mode);
+    std::this_thread::sleep_for(std::chrono::milliseconds(20));
 
     // Automatically load calibration file if configured
     if (impl_->auto_calib_enabled_) {
@@ -1006,20 +1045,21 @@ bool BNO055::getSensorOffsets(Offsets& offsets) {
     std::array<uint8_t, 22> data;
     if (!getSensorOffsets(data)) return false;
 
-    offsets.accel_offset_x = static_cast<int16_t>(data[0] | (data[1] << 8));
-    offsets.accel_offset_y = static_cast<int16_t>(data[2] | (data[3] << 8));
-    offsets.accel_offset_z = static_cast<int16_t>(data[4] | (data[5] << 8));
+    // Use read16_le to correctly handle unsigned-to-signed conversion without integer promotion UB.
+    offsets.accel_offset_x = read16_le(data.data());
+    offsets.accel_offset_y = read16_le(data.data() + 2);
+    offsets.accel_offset_z = read16_le(data.data() + 4);
 
-    offsets.mag_offset_x = static_cast<int16_t>(data[6] | (data[7] << 8));
-    offsets.mag_offset_y = static_cast<int16_t>(data[8] | (data[9] << 8));
-    offsets.mag_offset_z = static_cast<int16_t>(data[10] | (data[11] << 8));
+    offsets.mag_offset_x = read16_le(data.data() + 6);
+    offsets.mag_offset_y = read16_le(data.data() + 8);
+    offsets.mag_offset_z = read16_le(data.data() + 10);
 
-    offsets.gyro_offset_x = static_cast<int16_t>(data[12] | (data[13] << 8));
-    offsets.gyro_offset_y = static_cast<int16_t>(data[14] | (data[15] << 8));
-    offsets.gyro_offset_z = static_cast<int16_t>(data[16] | (data[17] << 8));
+    offsets.gyro_offset_x = read16_le(data.data() + 12);
+    offsets.gyro_offset_y = read16_le(data.data() + 14);
+    offsets.gyro_offset_z = read16_le(data.data() + 16);
 
-    offsets.accel_radius = static_cast<int16_t>(data[18] | (data[19] << 8));
-    offsets.mag_radius = static_cast<int16_t>(data[20] | (data[21] << 8));
+    offsets.accel_radius = read16_le(data.data() + 18);
+    offsets.mag_radius = read16_le(data.data() + 20);
     return true;
 }
 
@@ -1117,20 +1157,19 @@ bool BNO055::loadCalibrationFile(std::string_view filepath) {
 }
 
 void BNO055::enterSuspendMode() {
-    OpMode prev = impl_->mode_;
+    // Enter Config mode before changing power mode as required by the BNO055 datasheet.
+    // Do NOT restore the previous operating mode: the device is intentionally suspended.
     setMode(OpMode::Config);
     std::this_thread::sleep_for(std::chrono::milliseconds(25));
     impl_->write8(PWR_MODE, POWER_MODE_SUSPEND);
-    setMode(prev);
-    std::this_thread::sleep_for(std::chrono::milliseconds(20));
+    std::this_thread::sleep_for(std::chrono::milliseconds(10));
 }
 
 void BNO055::enterNormalMode() {
-    OpMode prev = impl_->mode_;
-    setMode(OpMode::Config);
-    std::this_thread::sleep_for(std::chrono::milliseconds(25));
+    // Restore normal power, then re-enter the previous operating mode.
     impl_->write8(PWR_MODE, POWER_MODE_NORMAL);
-    setMode(prev);
+    std::this_thread::sleep_for(std::chrono::milliseconds(10));
+    setMode(impl_->mode_);
     std::this_thread::sleep_for(std::chrono::milliseconds(20));
 }
 
