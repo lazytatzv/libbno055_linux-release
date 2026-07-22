@@ -13,6 +13,7 @@
   - [Power Management](#power-management)
   - [Logging](#logging)
 - [Utilities (Class-External)](#utilities-class-external)
+- [Class HeadingController](#class-headingcontroller)
 
 </details>
 
@@ -353,3 +354,224 @@ These companion APIs perform the exact same register queries and conversions but
         *   `q`: `const Quaternion&`. The normalized unit quaternion representation of orientation.
     *   *Returns*: `Vector3`. Roll, Pitch, and Yaw in degrees (Mapping: `x` = Roll `[-180, 180]`, `y` = Pitch `[-90, 90]`, `z` = Yaw `[0, 360)`).
     *   *Description*: Utility function to convert Quaternion orientation into human-readable Euler angles in degrees (now executing on single-precision `float` elements).
+
+---
+
+## C API Reference (`libbno055-linux/bno055_c.h`)
+
+The library includes a native C API (`extern "C"`) allowing seamless integration with C projects, Python (`ctypes`/`cffi`), Rust (`bindgen`), Go, and Zig.
+
+```c
+#include <libbno055-linux/bno055_c.h>
+
+// 1. Create Handle
+bno055_handle_t imu = bno055_create_i2c(0x28, "/dev/i2c-1");
+
+// 2. Initialize
+if (bno055_begin(imu, BNO055_OPMODE_NDOF)) {
+    bno055_quaternion_t q;
+    if (bno055_get_quaternion(imu, &q)) {
+        bno055_vector3_t euler = bno055_to_euler_degrees(&q);
+        printf("Roll=%.2f, Pitch=%.2f, Yaw=%.2f\n", euler.x, euler.y, euler.z);
+    }
+}
+
+// 3. Destroy
+bno055_destroy(imu);
+```
+
+---
+
+## Python API Reference (`import libbno055`)
+
+The Python module is built using `pybind11` and strictly mirrors the C++17 API, providing native C++ performance with Pythonic syntax. All hardware exceptions are caught at the C++ boundary, and failed reads gracefully return `None`.
+
+### Classes & Types
+
+*   **`libbno055.Vector3`**: Has properties `x`, `y`, `z` (floats).
+*   **`libbno055.Quaternion`**: Has properties `w`, `x`, `y`, `z` (floats).
+*   **`libbno055.CalibrationStatus`**: Has properties `sys`, `gyro`, `accel`, `mag` (integers 0-3), and method `is_fully_calibrated() -> bool`.
+*   **`libbno055.Diagnostics`**: Has properties `write_failures`, `read_failures`, `reconnect_attempts` (integers).
+*   **`libbno055.OpMode`**: Enum (e.g., `libbno055.OpMode.NDOF`, `libbno055.OpMode.IMUPlus`, `libbno055.OpMode.Config`).
+
+### Class: `BNO055`
+
+#### Constructors
+*   **`__init__(self, address: int = 0x28, device: str = "/dev/i2c-1")`**
+    Initializes the IMU for I2C communication.
+*   **`__init__(self, port: str, baudrate: int = 115200, timeout: float = 0.1)`**
+    Initializes the IMU for USB-to-UART serial communication.
+
+#### Configuration & Lifecycle
+*   **`begin(self, mode: OpMode = OpMode.NDOF) -> bool`**
+    Resets the sensor, verifies connection, and sets the target operation mode. Returns `True` on success.
+*   **`reset(self) -> bool`**
+    Triggers a soft hardware-reset and restores the current operation mode.
+*   **`set_mode(self, mode: OpMode) -> None`**
+    Switches the operating mode dynamically.
+
+#### Sensor Data Reading
+*These methods return the corresponding data structure on success, or `None` if an I2C/UART communication failure occurs.*
+
+*   **`get_accelerometer(self) -> Vector3 | None`**: Returns acceleration (m/s^2).
+*   **`get_magnetometer(self) -> Vector3 | None`**: Returns magnetic field (uT).
+*   **`get_gyroscope(self) -> Vector3 | None`**: Returns angular velocity (rad/s).
+*   **`get_euler_angles(self) -> Vector3 | None`**: Returns Roll, Pitch, Yaw (rad).
+*   **`get_linear_acceleration(self) -> Vector3 | None`**: Returns linear accel (m/s^2).
+*   **`get_gravity(self) -> Vector3 | None`**: Returns gravity vector (m/s^2).
+*   **`get_quaternion(self) -> Quaternion | None`**: Returns unit quaternion.
+*   **`get_temperature(self) -> int | None`**: Returns chip temperature (°C).
+
+#### Diagnostics & Utilities
+*   **`get_calibration_status(self) -> CalibrationStatus | None`**
+    Fetches the live calibration status (0 to 3) for all sensor blocks.
+*   **`get_diagnostics(self) -> Diagnostics`**
+    Returns internal telemetry tracking auto-reconnects and dropped frames.
+*   **`libbno055.to_euler_degrees(q: Quaternion) -> Vector3`**
+    (Module-level function). Converts a quaternion into Euler angles in degrees (`x`=Roll, `y`=Pitch, `z`=Yaw).
+
+---
+
+## Rust API Reference (`use libbno055::*`)
+
+The Rust crate (`libbno055`) is published on [crates.io](https://crates.io/crates/libbno055) and provides safe, idiomatic Rust wrappers around the C++ engine using Foreign Function Interfaces (FFI). 
+
+### Installation
+```bash
+cargo add libbno055
+```
+
+### Types & Structs
+All structures implement `Clone`, `Copy`, and `Debug`.
+
+*   **`pub struct Vector3 { pub x: f32, pub y: f32, pub z: f32 }`**
+*   **`pub struct Quaternion { pub w: f32, pub x: f32, pub y: f32, pub z: f32 }`**
+*   **`pub struct CalibrationStatus { pub sys: u8, pub gyro: u8, pub accel: u8, pub mag: u8 }`**
+    *   `impl CalibrationStatus { pub fn is_fully_calibrated(&self) -> bool }`
+*   **`pub struct Diagnostics { pub write_failures: u32, pub read_failures: u32, pub reconnect_attempts: u32 }`**
+*   **`pub struct RawSensorData { pub accel: Vector3, pub mag: Vector3, pub gyro: Vector3 }`**
+*   **`pub enum OpMode`**: Includes variants like `Config`, `AccOnly`, `IMUPlus`, `NDOF`, etc.
+
+### Struct: `BNO055`
+
+#### Constructors
+*   **`pub fn new_i2c(address: u8, device: &str) -> Result<BNO055, &'static str>`**
+    Attempts to create a BNO055 handler targeting an I2C device node. Fails if the C++ handler cannot be allocated.
+*   **`pub fn new_uart(port: &str, baudrate: u32) -> Result<BNO055, &'static str>`**
+    Attempts to create a BNO055 handler targeting a Serial UART port.
+
+#### Lifecycle & Configuration
+*   **`pub fn begin(&mut self, mode: OpMode) -> bool`**
+    Initializes hardware communication and puts the sensor into the requested fusion mode.
+*   **`pub fn reset(&mut self) -> bool`**
+    Issues a software reset to the IMU and restores the current configuration.
+
+#### Data Fetching
+*Methods return `Some(T)` on successful hardware reads, and `None` if an I2C bus error or lockup occurs.*
+
+*   **`pub fn get_accelerometer(&mut self) -> Option<Vector3>`**
+*   **`pub fn get_magnetometer(&mut self) -> Option<Vector3>`**
+*   **`pub fn get_gyroscope(&mut self) -> Option<Vector3>`**
+*   **`pub fn get_euler_angles(&mut self) -> Option<Vector3>`**
+*   **`pub fn get_linear_acceleration(&mut self) -> Option<Vector3>`**
+*   **`pub fn get_gravity(&mut self) -> Option<Vector3>`**
+*   **`pub fn get_quaternion(&mut self) -> Option<Quaternion>`**
+*   **`pub fn get_temperature(&mut self) -> Option<i8>`**
+*   **`pub fn get_raw_sensor_data(&mut self) -> Option<RawSensorData>`**
+    Reads all 9-axis raw values in a single 18-byte I2C burst transaction (utilizes `I2C_RDWR` if available).
+
+#### Diagnostics & Utilities
+*   **`pub fn get_calibration_status(&mut self) -> Option<CalibrationStatus>`**
+*   **`pub fn get_diagnostics(&self) -> Diagnostics`**
+*   **`pub fn to_euler_degrees(q: &Quaternion) -> Vector3`** (Static method on `BNO055`).
+
+```rust
+use libbno055::{BNO055, OpMode, Quaternion};
+
+fn main() -> Result<(), &'static str> {
+    let mut imu = BNO055::new_i2c(0x28, "/dev/i2c-1")?;
+    if imu.begin(OpMode::NDOF) {
+        if let Some(q) = imu.get_quaternion() {
+            let euler = BNO055::to_euler_degrees(&q);
+            println!("Roll: {:.2}, Pitch: {:.2}, Yaw: {:.2}", euler.x, euler.y, euler.z);
+        }
+    }
+    Ok(())
+}
+```
+
+---
+
+## Class HeadingController
+
+Heading PID & Feedforward Controller for robot straight-line driving & heading lock.
+
+Header: `#include "libbno055-linux/controllers/heading_controller.hpp"`
+
+```cpp
+namespace bno055lib {
+
+struct Quat {
+    double w{1.0};
+    double x{0.0};
+    double y{0.0};
+    double z{0.0};
+};
+
+class HeadingController {
+public:
+    struct Config {
+        double kp{0.05};             ///< Proportional Gain
+        double ki{0.001};            ///< Integral Gain (Trapezoidal Rule)
+        double kd{0.01};             ///< Derivative Gain (Filtered Gyro-based)
+        double kff{0.0};             ///< Feedforward Gain
+        double max_output{1.0};      ///< Max angular output limit
+        double min_output{-1.0};     ///< Min angular output limit
+        double max_i_term{0.2};      ///< Anti-windup saturation limit
+        double deadband_deg{0.02};   ///< Micro-deadband (deg)
+        double cutoff_freq_hz{20.0}; ///< Low-pass filter cutoff frequency (Hz)
+    };
+
+    struct Output {
+        double correction{0.0};   ///< Total control output u = u_FF + u_PID
+        double left_motor{0.0};   ///< Left wheel speed [0.0, 1.0]
+        double right_motor{0.0};  ///< Right wheel speed [0.0, 1.0]
+        double error_deg{0.0};     ///< Shortest heading error in degrees
+        double gyro_filtered{0.0}; ///< Low-pass filtered gyro rate
+    };
+
+    HeadingController() noexcept;
+    explicit HeadingController(const Config& config) noexcept;
+
+    void setGains(double kp, double ki, double kd, double kff = 0.0) noexcept;
+    void setConfig(const Config& config) noexcept;
+    const Config& getConfig() const noexcept;
+    void reset() noexcept;
+
+    // Euler Degrees Update
+    Output update(double target_heading_deg,
+                  double current_heading_deg,
+                  double dt,
+                  double gyro_z_deg = 0.0,
+                  double base_velocity = 0.5,
+                  double target_yaw_rate_deg = 0.0) noexcept;
+
+    // Direct Quaternion Update Overload
+    Output update(const Quat& q_target,
+                  const Quat& q_current,
+                  double dt,
+                  double gyro_z_deg = 0.0,
+                  double base_velocity = 0.5,
+                  double target_yaw_rate_deg = 0.0) noexcept;
+};
+
+// Utilities
+double normalizeAngleDeg(double angle_deg) noexcept;
+double fastExtractYawDeg(double qw, double qx, double qy, double qz) noexcept;
+double fastExtractYawDeg(const Quat& q) noexcept;
+
+}  // namespace bno055lib
+```
+
+
+
