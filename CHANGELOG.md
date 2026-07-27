@@ -5,6 +5,13 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.7.2] - 2026-07-27
+
+### Fixed
+- **ROS 2 Distro Compatibility**: Fixed service QoS profile setup to be compatible with ROS 2 Humble, Jazzy, Kilted, and Lyrical using compile-time version checks.
+- **CMake Modernization**: Replaced deprecated `ament_target_dependencies` with standard CMake `target_link_libraries` to resolve build errors on ROS 2 Lyrical.
+- **Python Bindings**: Corrected source file compilation paths in `setup.py` to fix macOS wheel build failures.
+
 ## [1.7.1] - 2026-07-22
 
 ### Added & Performance
