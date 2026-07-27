@@ -1,4 +1,5 @@
 #include <pthread.h>
+#include <rclcpp/version.h>
 #include <sched.h>
 
 #include <algorithm>
@@ -10,7 +11,9 @@
 #include <memory>
 #include <rclcpp/executors/multi_threaded_executor.hpp>
 #include <rclcpp/rclcpp.hpp>
+#ifdef BNO055_ROS2_BUILDING_COMPONENT
 #include <rclcpp_components/register_node_macro.hpp>
+#endif
 #include <sensor_msgs/msg/imu.hpp>
 #include <std_srvs/srv/trigger.hpp>
 #include <string>
@@ -108,7 +111,12 @@ public:
             this->create_service<std_srvs::srv::Trigger>("~/reset_heading",
                                                          std::bind(&BNO055HeadingControlNode::handleResetHeadingService,
                                                                    this, std::placeholders::_1, std::placeholders::_2),
-                                                         rmw_qos_profile_services_default, admin_cb_group_);
+#if RCLCPP_VERSION_MAJOR >= 28
+                                                         rclcpp::ServicesQoS(),
+#else
+                                                         rmw_qos_profile_services_default,
+#endif
+                                                         admin_cb_group_);
 
         // 6. Watchdog & IMU Health Check Timer (Checking at 20Hz / 50ms)
         watchdog_timer_ =
@@ -177,7 +185,7 @@ private:
         }
     }
 
-    void imuCallback(const sensor_msgs::msg::Imu::SharedPtr msg) noexcept {
+    void imuCallback(const sensor_msgs::msg::Imu::SharedPtr msg) {
         bno055lib::Quat q{msg->orientation.w, msg->orientation.x, msg->orientation.y, msg->orientation.z};
         if (BNO055_UNLIKELY(!bno055lib::isValidQuat(q))) {
             RCLCPP_WARN_THROTTLE(this->get_logger(), *this->get_clock(), 2000,
@@ -194,7 +202,7 @@ private:
         gyro_z_deg_ = msg->angular_velocity.z * bno055lib::RAD_TO_DEG;
     }
 
-    void cmdVelInCallback(const geometry_msgs::msg::Twist::SharedPtr msg) noexcept {
+    void cmdVelInCallback(const geometry_msgs::msg::Twist::SharedPtr msg) {
         const rclcpp::Time now = this->now();
         double dt = (now - last_time_).seconds();
         last_time_ = now;
@@ -343,8 +351,9 @@ private:
 
 }  // namespace bno055_ros2
 
+#ifdef BNO055_ROS2_BUILDING_COMPONENT
 RCLCPP_COMPONENTS_REGISTER_NODE(bno055_ros2::BNO055HeadingControlNode)
-
+#else
 int main(int argc, char* argv[]) {
     rclcpp::init(argc, argv);
     auto node = std::make_shared<bno055_ros2::BNO055HeadingControlNode>();
@@ -358,3 +367,4 @@ int main(int argc, char* argv[]) {
     rclcpp::shutdown();
     return 0;
 }
+#endif
