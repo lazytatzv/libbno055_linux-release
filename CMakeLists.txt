@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.10)
-project(libbno055_linux VERSION 1.7.1 LANGUAGES CXX C)
+project(libbno055_linux VERSION 1.7.2 LANGUAGES CXX C)
 
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -123,12 +123,23 @@ if(rclcpp_FOUND AND sensor_msgs_FOUND AND geometry_msgs_FOUND AND diagnostic_msg
     
     # --- 1. Standalone Executable (Publisher & Heading Control) ---
     add_executable(bno055_publisher_node src/ros2/ros2_publisher_node.cpp)
-    target_link_libraries(bno055_publisher_node libbno055-linux)
-    ament_target_dependencies(bno055_publisher_node rclcpp sensor_msgs diagnostic_msgs std_srvs)
+    target_link_libraries(bno055_publisher_node PUBLIC
+        libbno055-linux
+        rclcpp::rclcpp
+        ${sensor_msgs_TARGETS}
+        ${diagnostic_msgs_TARGETS}
+        ${std_srvs_TARGETS}
+    )
 
     add_executable(bno055_heading_control_node src/ros2/ros2_heading_control_node.cpp)
-    target_link_libraries(bno055_heading_control_node libbno055-linux)
-    ament_target_dependencies(bno055_heading_control_node rclcpp rclcpp_components sensor_msgs geometry_msgs diagnostic_msgs std_srvs)
+    target_link_libraries(bno055_heading_control_node PUBLIC
+        libbno055-linux
+        rclcpp::rclcpp
+        ${sensor_msgs_TARGETS}
+        ${geometry_msgs_TARGETS}
+        ${diagnostic_msgs_TARGETS}
+        ${std_srvs_TARGETS}
+    )
 
     install(TARGETS bno055_publisher_node bno055_heading_control_node
         DESTINATION lib/${PROJECT_NAME}
@@ -139,13 +150,27 @@ if(rclcpp_FOUND AND sensor_msgs_FOUND AND geometry_msgs_FOUND AND diagnostic_msg
         message(STATUS "rclcpp_components detected. Building Composable Node libraries.")
         add_library(bno055_ros2_components SHARED src/ros2/ros2_publisher_node.cpp)
         target_compile_definitions(bno055_ros2_components PRIVATE BNO055_ROS2_BUILDING_COMPONENT)
-        target_link_libraries(bno055_ros2_components libbno055-linux)
-        ament_target_dependencies(bno055_ros2_components rclcpp rclcpp_components sensor_msgs diagnostic_msgs std_srvs)
+        target_link_libraries(bno055_ros2_components PUBLIC
+            libbno055-linux
+            rclcpp::rclcpp
+            rclcpp_components::component
+            ${sensor_msgs_TARGETS}
+            ${diagnostic_msgs_TARGETS}
+            ${std_srvs_TARGETS}
+        )
         rclcpp_components_register_node(bno055_ros2_components PLUGIN "bno055_ros2::BNO055PublisherNode" EXECUTABLE bno055_publisher_node_container)
 
         add_library(bno055_heading_control_components SHARED src/ros2/ros2_heading_control_node.cpp)
-        target_link_libraries(bno055_heading_control_components libbno055-linux)
-        ament_target_dependencies(bno055_heading_control_components rclcpp rclcpp_components sensor_msgs geometry_msgs diagnostic_msgs std_srvs)
+        target_compile_definitions(bno055_heading_control_components PRIVATE BNO055_ROS2_BUILDING_COMPONENT)
+        target_link_libraries(bno055_heading_control_components PUBLIC
+            libbno055-linux
+            rclcpp::rclcpp
+            rclcpp_components::component
+            ${sensor_msgs_TARGETS}
+            ${geometry_msgs_TARGETS}
+            ${diagnostic_msgs_TARGETS}
+            ${std_srvs_TARGETS}
+        )
         rclcpp_components_register_node(bno055_heading_control_components PLUGIN "bno055_ros2::BNO055HeadingControlNode" EXECUTABLE bno055_heading_control_container)
 
         install(TARGETS bno055_ros2_components bno055_heading_control_components
@@ -159,12 +184,25 @@ if(rclcpp_FOUND AND sensor_msgs_FOUND AND geometry_msgs_FOUND AND diagnostic_msg
         message(STATUS "ROS 2 Lifecycle detected. Building Lifecycle Node sample.")
         # --- 3. Standalone Executable (Lifecycle) ---
         add_executable(bno055_lifecycle_publisher_node src/ros2/ros2_lifecycle_publisher_node.cpp)
-        target_link_libraries(bno055_lifecycle_publisher_node libbno055-linux)
-        ament_target_dependencies(bno055_lifecycle_publisher_node rclcpp rclcpp_lifecycle sensor_msgs diagnostic_msgs std_srvs)
+        target_link_libraries(bno055_lifecycle_publisher_node PUBLIC
+            libbno055-linux
+            rclcpp::rclcpp
+            rclcpp_lifecycle::rclcpp_lifecycle
+            ${sensor_msgs_TARGETS}
+            ${diagnostic_msgs_TARGETS}
+            ${std_srvs_TARGETS}
+        )
 
         add_executable(bno055_lifecycle_heading_control_node src/ros2/ros2_lifecycle_heading_control_node.cpp)
-        target_link_libraries(bno055_lifecycle_heading_control_node libbno055-linux)
-        ament_target_dependencies(bno055_lifecycle_heading_control_node rclcpp rclcpp_lifecycle rclcpp_components sensor_msgs geometry_msgs diagnostic_msgs std_srvs)
+        target_link_libraries(bno055_lifecycle_heading_control_node PUBLIC
+            libbno055-linux
+            rclcpp::rclcpp
+            rclcpp_lifecycle::rclcpp_lifecycle
+            ${sensor_msgs_TARGETS}
+            ${geometry_msgs_TARGETS}
+            ${diagnostic_msgs_TARGETS}
+            ${std_srvs_TARGETS}
+        )
 
         install(TARGETS bno055_lifecycle_publisher_node bno055_lifecycle_heading_control_node
             DESTINATION lib/${PROJECT_NAME}
@@ -175,13 +213,29 @@ if(rclcpp_FOUND AND sensor_msgs_FOUND AND geometry_msgs_FOUND AND diagnostic_msg
             message(STATUS "Building Lifecycle Composable Node library.")
             add_library(bno055_ros2_lifecycle_components SHARED src/ros2/ros2_lifecycle_publisher_node.cpp)
             target_compile_definitions(bno055_ros2_lifecycle_components PRIVATE BNO055_ROS2_BUILDING_COMPONENT)
-            target_link_libraries(bno055_ros2_lifecycle_components libbno055-linux)
-            ament_target_dependencies(bno055_ros2_lifecycle_components rclcpp rclcpp_lifecycle rclcpp_components sensor_msgs diagnostic_msgs std_srvs)
+            target_link_libraries(bno055_ros2_lifecycle_components PUBLIC
+                libbno055-linux
+                rclcpp::rclcpp
+                rclcpp_lifecycle::rclcpp_lifecycle
+                rclcpp_components::component
+                ${sensor_msgs_TARGETS}
+                ${diagnostic_msgs_TARGETS}
+                ${std_srvs_TARGETS}
+            )
             rclcpp_components_register_node(bno055_ros2_lifecycle_components PLUGIN "bno055_ros2::BNO055LifecyclePublisherNode" EXECUTABLE bno055_lifecycle_publisher_node_container)
 
             add_library(bno055_lifecycle_heading_control_components SHARED src/ros2/ros2_lifecycle_heading_control_node.cpp)
-            target_link_libraries(bno055_lifecycle_heading_control_components libbno055-linux)
-            ament_target_dependencies(bno055_lifecycle_heading_control_components rclcpp rclcpp_lifecycle rclcpp_components sensor_msgs geometry_msgs diagnostic_msgs std_srvs)
+            target_compile_definitions(bno055_lifecycle_heading_control_components PRIVATE BNO055_ROS2_BUILDING_COMPONENT)
+            target_link_libraries(bno055_lifecycle_heading_control_components PUBLIC
+                libbno055-linux
+                rclcpp::rclcpp
+                rclcpp_lifecycle::rclcpp_lifecycle
+                rclcpp_components::component
+                ${sensor_msgs_TARGETS}
+                ${geometry_msgs_TARGETS}
+                ${diagnostic_msgs_TARGETS}
+                ${std_srvs_TARGETS}
+            )
             rclcpp_components_register_node(bno055_lifecycle_heading_control_components PLUGIN "bno055_ros2::BNO055LifecycleHeadingControlNode" EXECUTABLE bno055_lifecycle_heading_control_container)
 
             install(TARGETS bno055_ros2_lifecycle_components bno055_lifecycle_heading_control_components
@@ -310,11 +364,17 @@ if(BUILD_TESTING AND NOT rclcpp_FOUND)
         target_compile_definitions(libbno055-linux_ros2_tests PRIVATE ROS2_NODE_TESTING)
         
         if(TARGET GTest::gtest_main)
-            target_link_libraries(libbno055-linux_ros2_tests libbno055-linux GTest::gtest_main)
+            target_link_libraries(libbno055-linux_ros2_tests PUBLIC libbno055-linux GTest::gtest_main)
         else()
-            target_link_libraries(libbno055-linux_ros2_tests libbno055-linux gtest_main)
+            target_link_libraries(libbno055-linux_ros2_tests PUBLIC libbno055-linux gtest_main)
         endif()
-        ament_target_dependencies(libbno055-linux_ros2_tests rclcpp rclcpp_lifecycle sensor_msgs diagnostic_msgs std_srvs)
+        target_link_libraries(libbno055-linux_ros2_tests PUBLIC
+            rclcpp::rclcpp
+            rclcpp_lifecycle::rclcpp_lifecycle
+            ${sensor_msgs_TARGETS}
+            ${diagnostic_msgs_TARGETS}
+            ${std_srvs_TARGETS}
+        )
         gtest_discover_tests(libbno055-linux_ros2_tests)
     endif()
 endif()

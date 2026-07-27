@@ -4,12 +4,14 @@
 #include <algorithm>
 #include <cmath>
 
+#ifndef BNO055_LIKELY
 #if defined(__GNUC__) || defined(__clang__)
 #define BNO055_LIKELY(x)   __builtin_expect(!!(x), 1)
 #define BNO055_UNLIKELY(x) __builtin_expect(!!(x), 0)
 #else
 #define BNO055_LIKELY(x)   (x)
 #define BNO055_UNLIKELY(x) (x)
+#endif
 #endif
 
 namespace bno055lib {
