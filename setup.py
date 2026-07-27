@@ -8,8 +8,8 @@ ext_modules = [
         "libbno055",
         [
             "src/python/bindings.cpp",
-            "src/bno055.cpp",
-            "src/bno055_c.cpp",
+            "src/core/bno055.cpp",
+            "src/core/bno055_c.cpp",
         ],
         include_dirs=["include"],
         cxx_std=17,
@@ -18,7 +18,7 @@ ext_modules = [
 
 setup(
     name="libbno055-linux",
-    version="1.7.1",
+    version="1.7.2",
     author="lazytatzv",
     author_email="lazytatzv@users.noreply.github.com",
     url="https://github.com/lazytatzv/libbno055-linux",
