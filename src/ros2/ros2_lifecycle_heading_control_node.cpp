@@ -1,3 +1,5 @@
+#include <rclcpp/version.h>
+
 #include <algorithm>
 #include <chrono>
 #include <diagnostic_msgs/msg/diagnostic_array.hpp>
@@ -7,7 +9,9 @@
 #include <memory>
 #include <rclcpp/executors/multi_threaded_executor.hpp>
 #include <rclcpp/rclcpp.hpp>
+#ifdef BNO055_ROS2_BUILDING_COMPONENT
 #include <rclcpp_components/register_node_macro.hpp>
+#endif
 #include <rclcpp_lifecycle/lifecycle_node.hpp>
 #include <rclcpp_lifecycle/lifecycle_publisher.hpp>
 #include <sensor_msgs/msg/imu.hpp>
@@ -99,7 +103,12 @@ public:
             "~/reset_heading",
             std::bind(&BNO055LifecycleHeadingControlNode::handleResetHeadingService, this, std::placeholders::_1,
                       std::placeholders::_2),
-            rmw_qos_profile_services_default, admin_cb_group_);
+#if RCLCPP_VERSION_MAJOR >= 28
+            rclcpp::ServicesQoS(),
+#else
+            rmw_qos_profile_services_default,
+#endif
+            admin_cb_group_);
 
         RCLCPP_INFO(this->get_logger(), "Node configured successfully with isolated CallbackGroups.");
         return CallbackReturn::SUCCESS;
@@ -221,7 +230,7 @@ private:
         }
     }
 
-    void imuCallback(const sensor_msgs::msg::Imu::SharedPtr msg) noexcept {
+    void imuCallback(const sensor_msgs::msg::Imu::SharedPtr msg) {
         const rclcpp::Time now = this->now();
         last_imu_time_ = now;
         has_imu_data_ = true;
@@ -232,7 +241,7 @@ private:
         gyro_z_deg_ = msg->angular_velocity.z * bno055lib::RAD_TO_DEG;
     }
 
-    void cmdVelInCallback(const geometry_msgs::msg::Twist::SharedPtr msg) noexcept {
+    void cmdVelInCallback(const geometry_msgs::msg::Twist::SharedPtr msg) {
         if (!cmd_vel_pub_->is_activated()) return;
 
         const rclcpp::Time now = this->now();
@@ -387,8 +396,9 @@ private:
 
 }  // namespace bno055_ros2
 
+#ifdef BNO055_ROS2_BUILDING_COMPONENT
 RCLCPP_COMPONENTS_REGISTER_NODE(bno055_ros2::BNO055LifecycleHeadingControlNode)
-
+#else
 int main(int argc, char* argv[]) {
     rclcpp::init(argc, argv);
     auto node = std::make_shared<bno055_ros2::BNO055LifecycleHeadingControlNode>();
@@ -400,3 +410,4 @@ int main(int argc, char* argv[]) {
     rclcpp::shutdown();
     return 0;
 }
+#endif
