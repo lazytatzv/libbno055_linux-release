@@ -8,7 +8,9 @@
 #include <memory>
 #include <rclcpp/executors/multi_threaded_executor.hpp>
 #include <rclcpp/rclcpp.hpp>
+#ifdef BNO055_ROS2_BUILDING_COMPONENT
 #include <rclcpp_components/register_node_macro.hpp>
+#endif
 #include <sensor_msgs/msg/imu.hpp>
 #include <sensor_msgs/msg/magnetic_field.hpp>
 #include <sensor_msgs/msg/temperature.hpp>
@@ -16,8 +18,8 @@
 #include <string>
 #include <vector>
 
+#include "bno055_ros2_common.hpp"
 #include "libbno055-linux/bno055.hpp"
-#include "ros2/bno055_ros2_common.hpp"
 
 namespace bno055_ros2 {
 
@@ -57,7 +59,7 @@ public:
         const std::string device = this->get_parameter("device").as_string();
         const uint8_t address = static_cast<uint8_t>(this->get_parameter("address").as_int());
 
-        imu_driver_ = std::make_unique<bno055lib::BNO055>(device, address);
+        imu_driver_ = std::make_unique<bno055lib::BNO055>(address, device);
         if (imu_driver_->begin(bno055lib::OpMode::NDOF)) {
             initialized_ = true;
             RCLCPP_INFO(this->get_logger(), "BNO055 hardware initialized on %s (0x%02X)", device.c_str(), address);
@@ -176,10 +178,9 @@ private:
 
 }  // namespace bno055_ros2
 
-#ifndef BNO055_ROS2_BUILDING_COMPONENT
+#ifdef BNO055_ROS2_BUILDING_COMPONENT
 RCLCPP_COMPONENTS_REGISTER_NODE(bno055_ros2::BNO055PublisherNode)
-#endif
-
+#else
 int main(int argc, char* argv[]) {
     rclcpp::init(argc, argv);
     auto node = std::make_shared<bno055_ros2::BNO055PublisherNode>();
@@ -193,3 +194,4 @@ int main(int argc, char* argv[]) {
     rclcpp::shutdown();
     return 0;
 }
+#endif
