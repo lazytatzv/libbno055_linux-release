@@ -1,3 +1,26 @@
+## libbno055_linux (humble) - 1.7.2-1
+
+The packages in the `libbno055_linux` repository were released into the `humble` distro by running `/usr/bin/bloom-release libbno055_linux --rosdistro humble --track humble` on `Mon, 27 Jul 2026 04:55:42 -0000`
+
+The `libbno055_linux` package was released.
+
+Version of package(s) in repository `libbno055_linux`:
+
+- upstream repository: git@github.com:lazytatzv/bno055lib.git
+- release repository: https://github.com/lazytatzv/libbno055_linux-release.git
+- rosdistro version: `1.7.1-1`
+- old version: `1.7.1-1`
+- new version: `1.7.2-1`
+
+Versions of tools used:
+
+- bloom version: `0.14.3`
+- catkin_pkg version: `1.1.0`
+- rosdep version: `0.26.0`
+- rosdistro version: `1.0.1`
+- vcstools version: `0.1.42`
+
+
 ## libbno055_linux (lyrical) - 1.7.1-1
 
 The packages in the `libbno055_linux` repository were released into the `lyrical` distro by running `/home/yano/libbno055-linux/.venv/bin/bloom-release libbno055_linux --rosdistro lyrical --track lyrical` on `Wed, 22 Jul 2026 09:28:52 -0000`
