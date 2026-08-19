@@ -42,7 +42,9 @@ public:
           is_watchdog_triggered_(false),
           is_imu_timeout_(false),
           last_correction_(0.0),
-          last_error_deg_(0.0) {
+          last_error_deg_(0.0),
+          yaw_axis_("z"),
+          max_translation_speed_(1.0) {
         // Declare Parameters
         this->declare_parameter<double>("kp", 0.05);
         this->declare_parameter<double>("ki", 0.001);
@@ -59,6 +61,8 @@ public:
         this->declare_parameter<std::string>("cmd_vel_in_topic", "cmd_vel_in");
         this->declare_parameter<std::string>("cmd_vel_out_topic", "cmd_vel");
         this->declare_parameter<bool>("enable_diagnostics", true);
+        this->declare_parameter<std::string>("yaw_axis", "z");
+        this->declare_parameter<double>("max_translation_speed", 1.0);
 
         RCLCPP_INFO(this->get_logger(), "[Lifecycle Node] BNO055 Lifecycle Heading Control Node created.");
     }
@@ -85,10 +89,8 @@ public:
         const std::string cmd_vel_in_topic = this->get_parameter("cmd_vel_in_topic").as_string();
         const std::string cmd_vel_out_topic = this->get_parameter("cmd_vel_out_topic").as_string();
 
-        cmd_vel_pub_ =
-            this->create_publisher<geometry_msgs::msg::Twist>(cmd_vel_out_topic, rclcpp::SystemDefaultsQoS());
-        diag_pub_ =
-            this->create_publisher<diagnostic_msgs::msg::DiagnosticArray>("diagnostics", rclcpp::SystemDefaultsQoS());
+        cmd_vel_pub_ = this->create_publisher<geometry_msgs::msg::Twist>(cmd_vel_out_topic, rclcpp::QoS(10));
+        diag_pub_ = this->create_publisher<diagnostic_msgs::msg::DiagnosticArray>("diagnostics", rclcpp::QoS(1));
 
         imu_sub_ = this->create_subscription<sensor_msgs::msg::Imu>(
             imu_topic, rclcpp::SensorDataQoS(),
@@ -195,6 +197,9 @@ private:
         cfg.min_output = -cfg.max_output;
         cfg.deadband_deg = this->get_parameter("deadband_deg").as_double();
         cfg.cutoff_freq_hz = this->get_parameter("cutoff_freq_hz").as_double();
+        cfg.max_slew_rate = this->get_parameter("max_slew_rate").as_double();
+        yaw_axis_ = this->get_parameter("yaw_axis").as_string();
+        max_translation_speed_ = this->get_parameter("max_translation_speed").as_double();
         controller_.setConfig(cfg);
     }
 
@@ -202,16 +207,43 @@ private:
         rcl_interfaces::msg::SetParametersResult result;
         result.successful = true;
 
+        bno055lib::HeadingController::Config cfg = controller_.getConfig();
+
         for (const auto& param : parameters) {
-            if (param.get_name() == "kp" || param.get_name() == "ki" || param.get_name() == "kd" ||
-                param.get_name() == "kff" || param.get_name() == "max_i_term" || param.get_name() == "max_output" ||
-                param.get_name() == "deadband_deg" || param.get_name() == "cutoff_freq_hz" ||
-                param.get_name() == "cmd_vel_timeout" || param.get_name() == "imu_timeout") {
-                RCLCPP_INFO(this->get_logger(), "Dynamic parameter updated: %s = %f", param.get_name().c_str(),
-                            param.as_double());
+            const std::string& name = param.get_name();
+            if (name == "kp") {
+                cfg.kp = param.as_double();
+            } else if (name == "ki") {
+                cfg.ki = param.as_double();
+            } else if (name == "kd") {
+                cfg.kd = param.as_double();
+            } else if (name == "kff") {
+                cfg.kff = param.as_double();
+            } else if (name == "max_i_term") {
+                cfg.max_i_term = param.as_double();
+            } else if (name == "max_output") {
+                cfg.max_output = param.as_double();
+                cfg.min_output = -cfg.max_output;
+            } else if (name == "deadband_deg") {
+                cfg.deadband_deg = param.as_double();
+            } else if (name == "cutoff_freq_hz") {
+                cfg.cutoff_freq_hz = param.as_double();
+            } else if (name == "max_slew_rate") {
+                cfg.max_slew_rate = param.as_double();
+            } else if (name == "yaw_axis") {
+                yaw_axis_ = param.as_string();
+            } else if (name == "max_translation_speed") {
+                max_translation_speed_ = param.as_double();
+            }
+
+            if (name == "kp" || name == "ki" || name == "kd" || name == "kff" || name == "max_i_term" ||
+                name == "max_output" || name == "deadband_deg" || name == "cutoff_freq_hz" || name == "max_slew_rate" ||
+                name == "cmd_vel_timeout" || name == "imu_timeout" || name == "yaw_axis" ||
+                name == "max_translation_speed") {
+                RCLCPP_INFO(this->get_logger(), "Dynamic parameter updated: %s = %f", name.c_str(), param.as_double());
             }
         }
-        updateControllerConfigFromParams();
+        controller_.setConfig(cfg);
         return result;
     }
 
@@ -237,8 +269,36 @@ private:
         is_imu_timeout_ = false;
 
         current_quat_ = bno055lib::Quat{msg->orientation.w, msg->orientation.x, msg->orientation.y, msg->orientation.z};
-        current_heading_deg_ = bno055lib::fastExtractYawDeg(current_quat_);
-        gyro_z_deg_ = msg->angular_velocity.z * bno055lib::RAD_TO_DEG;
+
+        double yaw_rad = 0.0;
+        double gyro_rate_rad = 0.0;
+
+        if (yaw_axis_ == "x") {
+            // Roll as Yaw
+            const double sinr_cosp = 2.0 * (current_quat_.w * current_quat_.x + current_quat_.y * current_quat_.z);
+            const double cosr_cosp =
+                1.0 - 2.0 * (current_quat_.x * current_quat_.x + current_quat_.y * current_quat_.y);
+            yaw_rad = std::atan2(sinr_cosp, cosr_cosp);
+            gyro_rate_rad = msg->angular_velocity.x;
+        } else if (yaw_axis_ == "y") {
+            // Pitch as Yaw
+            const double sinp = 2.0 * (current_quat_.w * current_quat_.y - current_quat_.z * current_quat_.x);
+            if (std::abs(sinp) >= 1.0)
+                yaw_rad = std::copysign(M_PI / 2.0, sinp);
+            else
+                yaw_rad = std::asin(sinp);
+            gyro_rate_rad = msg->angular_velocity.y;
+        } else {
+            // Z as Yaw (default)
+            const double siny_cosp = 2.0 * (current_quat_.w * current_quat_.z + current_quat_.x * current_quat_.y);
+            const double cosy_cosp =
+                1.0 - 2.0 * (current_quat_.y * current_quat_.y + current_quat_.z * current_quat_.z);
+            yaw_rad = std::atan2(siny_cosp, cosy_cosp);
+            gyro_rate_rad = msg->angular_velocity.z;
+        }
+
+        current_heading_deg_ = yaw_rad * bno055lib::RAD_TO_DEG;
+        gyro_z_deg_ = gyro_rate_rad * bno055lib::RAD_TO_DEG;
     }
 
     void cmdVelInCallback(const geometry_msgs::msg::Twist::SharedPtr msg) {
@@ -262,25 +322,62 @@ private:
 
         const double deadband = this->get_parameter("angular_deadband").as_double();
         const bool is_commanded_to_turn = std::abs(msg->angular.z) > deadband;
+        const bool is_translating =
+            (std::abs(msg->linear.x) > 0.01 || std::abs(msg->linear.y) > 0.01 || std::abs(msg->linear.z) > 0.01);
 
         if (is_commanded_to_turn || !has_imu_data_ || is_imu_timeout_) {
             target_heading_locked_ = false;
+            target_quat_ = current_quat_;
+            target_heading_deg_ = current_heading_deg_;
             controller_.reset();
             out_twist->angular = msg->angular;  // Fail-Safe Passthrough
             last_correction_ = 0.0;
             last_error_deg_ = 0.0;
+        } else if (!is_translating) {
+            // When not translating, do not apply correction to avoid creeping due to sensor drift
+            controller_.reset();
+            out_twist->angular.z = 0.0;
+            last_correction_ = 0.0;
+            last_error_deg_ = 0.0;
         } else {
             if (!target_heading_locked_) {
-                target_quat_ = current_quat_;
-                target_heading_deg_ = current_heading_deg_;
-                target_heading_locked_ = true;
+                // Wait until the physical rotation speed (from gyro) drops below a threshold
+                // to prevent overshoot/snap-back caused by robot inertia and IMU latency.
+                const double stop_threshold_deg = 5.0;  // deg/s
+                if (std::abs(gyro_z_deg_) < stop_threshold_deg || !has_imu_data_ || is_imu_timeout_) {
+                    target_quat_ = current_quat_;
+                    target_heading_deg_ = current_heading_deg_;
+                    target_heading_locked_ = true;
+                } else {
+                    target_quat_ = current_quat_;
+                    target_heading_deg_ = current_heading_deg_;
+                }
             }
 
-            auto out = controller_.update(target_quat_, current_quat_, dt, gyro_z_deg_, msg->linear.x);
-            out_twist->angular.z = out.correction;
-            last_correction_ = out.correction;
-            last_error_deg_ = out.error_deg;
+            if (target_heading_locked_) {
+                auto out = controller_.update(target_quat_, current_quat_, dt, gyro_z_deg_, msg->linear.x);
+
+                // Scale the PID correction output by the velocity factor to match JoyDriverNode logic
+                const double velocity_magnitude =
+                    std::sqrt(msg->linear.x * msg->linear.x + msg->linear.y * msg->linear.y);
+                const double velocity_factor = std::clamp(velocity_magnitude / max_translation_speed_, 0.3, 1.0);
+
+                out_twist->angular.z = out.correction * velocity_factor;
+                last_correction_ = out_twist->angular.z;
+                last_error_deg_ = out.error_deg;
+            } else {
+                out_twist->angular.z = 0.0;
+                last_correction_ = 0.0;
+                last_error_deg_ = 0.0;
+            }
         }
+
+        RCLCPP_INFO_THROTTLE(this->get_logger(), *this->get_clock(), 500,
+                             "[HeadingControl] InVel: x=%.2f, z=%.2f | CommandTurn: %s | Locked: %s | Target yaw: "
+                             "%.1f, Curr yaw: %.1f | Gyro Z: %.2f | Correct Out: %.3f",
+                             msg->linear.x, msg->angular.z, is_commanded_to_turn ? "YES" : "NO",
+                             target_heading_locked_ ? "YES" : "NO", target_heading_deg_, current_heading_deg_,
+                             gyro_z_deg_, out_twist->angular.z);
 
         cmd_vel_pub_->publish(std::move(out_twist));
     }
@@ -310,7 +407,7 @@ private:
                 if (!is_watchdog_triggered_) {
                     RCLCPP_WARN(this->get_logger(), "Watchdog Timeout! Publishing ZERO VELOCITY.");
                     is_watchdog_triggered_ = true;
-                    target_heading_locked_ = false;
+                    // Keep target_heading_locked_ to preserve target heading target across stops
                     controller_.reset();
                 }
 
@@ -392,6 +489,8 @@ private:
     bool is_imu_timeout_;
     double last_correction_;
     double last_error_deg_;
+    std::string yaw_axis_;
+    double max_translation_speed_;
 };
 
 }  // namespace bno055_ros2

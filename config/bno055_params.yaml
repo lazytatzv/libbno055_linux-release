@@ -91,6 +91,18 @@
     # =========================================================================
     frame_id: "imu_link"
 
+    # --- TF (TransformBroadcaster) & Lever Arm Offset (Center of Mass) ---
+    # Set publish_tf to true to broadcast IMU orientation on /tf (parent -> child).
+    publish_tf: false
+    parent_frame_id: "odom"
+    child_frame_id: "base_link"
+
+    # Physical offset [meters] from the robot's center of mass (base_link) to the IMU sensor.
+    # Essential for EKF (robot_localization) and Nav2 to compensate for Lever Arm acceleration!
+    imu_offset_x: 0.0   # Forward offset (+X) in meters
+    imu_offset_y: 0.0   # Leftward offset (+Y) in meters
+    imu_offset_z: 0.0   # Upward offset (+Z) in meters
+
     # "best_effort" (SensorDataQoS) is strictly recommended for IMUs. 
     # If a network packet is dropped, ROS will skip it instead of resending stale data to your EKF.
     qos_reliability: "best_effort"
