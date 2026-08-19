@@ -24,6 +24,17 @@ euler = libbno055.to_euler_degrees(q)
 assert euler.x == 0.0 and euler.y == 0.0 and euler.z == 0.0
 print(f"to_euler_degrees test passed: {euler}")
 
+# Test AxisMapConfig and AxisMapSign enums
+assert libbno055.AxisMapConfig.P0 != libbno055.AxisMapConfig.P1
+assert libbno055.AxisMapSign.P0 != libbno055.AxisMapSign.P1
+print("AxisMapConfig/Sign enums test passed!")
+
+# Test AllData struct
+data = libbno055.AllData()
+data.temp = 25
+assert data.temp == 25
+print(f"AllData test passed: {data}")
+
 # Test BNO055 instantiation and OpMode
 imu = libbno055.BNO055(0x28, "mock_device")
 assert imu is not None

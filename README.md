@@ -4,9 +4,11 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 [![C++ Standard](https://img.shields.io/badge/C%2B%2B-17-blue.svg)](https://en.cppreference.com/w/cpp/17)
 [![ROS 2](https://img.shields.io/badge/ROS%202-Humble%20%7C%20Jazzy%20%7C%20Kilted%20%7C%20Lyrical-orange.svg)](https://docs.ros.org/)
-[![Version](https://img.shields.io/badge/version-1.7.2-green.svg)](CHANGELOG.md)
+[![Version](https://img.shields.io/badge/version-1.9.0-green.svg)](CHANGELOG.md)
 
 A C++17 driver for the Bosch BNO055 9-axis IMU on Linux, with first-class ROS 2 integration.
+
+![BNO055 Visual Dashboard](docs/images/dashboard.png)
 
 ---
 
@@ -86,10 +88,24 @@ cargo add libbno055
 - **I2C and UART** transport backends with POSIX drivers
 - **Automatic transport recovery** on bus errors and communication failures
 - **18-byte sequential burst read** for Accel + Mag + Gyro in a single transaction
-  (measured at ~450 µs on 400 kHz I²C; actual latency depends on hardware and kernel scheduling)
+- **Stale Data Deduplication Filter** — eliminates duplicate frame publishing in ROS 2
 - **Configurable sensor output data rates** in AMG mode (up to Accel 1 kHz / Gyro 2 kHz ODR)
 - **Optional background polling thread** for continuous non-blocking reads
 - **Calibration management** — save and load sensor offsets to/from file
+
+---
+
+### Empirical Benchmark (RDK X5 Hardware Validation)
+
+Tested out-of-the-box on **RDK X5 (Sunrise RDK)** via standard Linux `/dev/i2c-5` interface with **zero tuning or custom OS setup**:
+
+![RDK X5 Hardware Benchmark Results](docs/images/benchmark.png)
+
+| Metric | Measured Value | Target / Hardware Limit | Note |
+| :--- | :---: | :---: | :--- |
+| **NDOF Sampling Rate** | **82.57 Hz** | 100 Hz (Hardware Limit) | ~83% of physical Cortex-M0 fusion limit |
+| **I/O Burst Read Latency** | **1.99 ms** | < 5.0 ms | 18-byte sequential burst read over default I2C |
+| **Timing Jitter (StdDev)** | **0.73 ms** | < 1.0 ms | Sub-millisecond interval jitter out-of-the-box |
 
 For the full API including GPIO interrupts, axis remapping, power modes, and operating modes, see [docs/API_REFERENCE.md](docs/API_REFERENCE.md).
 
@@ -113,7 +129,7 @@ sudo apt update
 sudo apt install ros-$ROS_DISTRO-libbno055-linux
 ```
 
-> The `apt` binary is updated periodically by ROS Buildfarm. For the latest release (v1.7.2), build from source.
+> The `apt` binary is updated periodically by ROS Buildfarm. For the latest release (v1.9.0), build from source.
 
 ### Option B: vcstool (recommended for team/production workspaces)
 
@@ -125,7 +141,7 @@ repositories:
   libbno055-linux:
     type: git
     url: https://github.com/lazytatzv/libbno055-linux.git
-    version: v1.7.2
+    version: v1.9.0
 ```
 
 Then import and build:
@@ -174,6 +190,9 @@ Key parameters (see [`config/bno055_params.yaml`](config/bno055_params.yaml) for
 | `address` | `0x28` | I2C slave address |
 | `publish_rate_hz` | `100` | Sensor publish rate (Hz) |
 | `frame_id` | `imu_link` | ROS TF frame ID |
+| `imu_offset_x` | `0.0` | Forward physical offset from robot center of mass (m) for Lever Arm / TF |
+| `imu_offset_y` | `0.0` | Leftward physical offset from robot center of mass (m) for Lever Arm / TF |
+| `imu_offset_z` | `0.0` | Upward physical offset from robot center of mass (m) for Lever Arm / TF |
 | ... | | |
 
 ---
