@@ -13,29 +13,38 @@
 
 int main(int argc, char** argv) {
     std::string device = "/dev/i2c-1";
-    int pin = 24;
+    int pin = -1;
 
     if (argc > 1) {
         device = argv[1];
     }
+    bno055lib::OpMode mode = bno055lib::OpMode::NDOF;
+    std::string mode_str = "ndof";
+
     if (argc > 2) {
-        pin = std::stoi(argv[2]);
+        mode_str = argv[2];
+        if (mode_str == "amg") {
+            mode = bno055lib::OpMode::AMG;
+        } else if (mode_str == "imu") {
+            mode = bno055lib::OpMode::IMUPlus;
+        } else if (mode_str == "ndof") {
+            mode = bno055lib::OpMode::NDOF;
+        }
+    }
+    if (argc > 3) {
+        pin = std::stoi(argv[3]);
     }
 
-    std::cout << "=========================================================\n";
-    std::cout << "        BNO055 Benchmark Utility        \n";
-    std::cout << "=========================================================\n";
-    std::cout << "Device: " << device << "\n";
+    std::cout << "Mode: " << mode_str << "\n";
     std::cout << "Interrupt GPIO Pin: " << pin << "\n";
 
     bno055lib::BNO055 imu(0x28, device);
 
-    // Boot sensor in AMG (Raw) mode to enable 2kHz Gyro / 1kHz Accel overclocking
-    if (!imu.begin(bno055lib::OpMode::AMG)) {
-        std::cerr << "[-] Failed to initialize BNO055 in AMG Mode.\n";
+    if (!imu.begin(mode)) {
+        std::cerr << "[-] Failed to initialize BNO055 in " << mode_str << " Mode.\n";
         return 1;
     }
-    std::cout << "[+] BNO055 initialized in AMG (Raw Overclocked) Mode.\n";
+    std::cout << "[+] BNO055 initialized in " << mode_str << " Mode.\n";
 
     constexpr int NUM_SAMPLES = 2000; // Benchmark for 2000 samples (~1 second at 2kHz)
     std::vector<double> io_latencies;
@@ -80,14 +89,42 @@ int main(int argc, char** argv) {
 
     auto start_bench = std::chrono::high_resolution_clock::now();
     
-    // Register GPIO hardware interrupt listener
-    imu.startInterruptDrivenReading(pin, callback);
+    // Attempt GPIO interrupt mode if pin >= 0, or fallback to polling loop
+    bool is_interrupt_started = false;
+    if (pin >= 0) {
+        is_interrupt_started = imu.startInterruptDrivenReading(pin, callback);
+    }
+    if (!is_interrupt_started) {
+        std::cout << "[!] GPIO interrupt pin not available or failed. Falling back to software polling mode...\n";
+        
+        while (sample_count < NUM_SAMPLES) {
+            auto now = std::chrono::high_resolution_clock::now();
+            auto start_io = std::chrono::high_resolution_clock::now();
+            auto quat = imu.getQuaternionNoexcept();
+            auto end_io = std::chrono::high_resolution_clock::now();
 
-    // Wait until collection completes
-    std::unique_lock<std::mutex> lock(mtx);
-    cv.wait(lock, [&]() { return sample_count >= NUM_SAMPLES; });
-
-    imu.stopInterruptDrivenReading();
+            if (sample_count > 0) {
+                std::chrono::duration<double, std::micro> diff = now - last_time;
+                intervals.push_back(diff.count());
+            }
+            if (quat) {
+                std::chrono::duration<double, std::micro> io_diff = end_io - start_io;
+                io_latencies.push_back(io_diff.count());
+            }
+            
+            last_time = now;
+            sample_count++;
+            
+            // Limit loop rate depending on mode (100Hz for NDOF/IMU, 1kHz for AMG)
+            int sleep_ms = (mode == bno055lib::OpMode::AMG) ? 1 : 10;
+            std::this_thread::sleep_for(std::chrono::milliseconds(sleep_ms));
+        }
+    } else {
+        // Wait until interrupt collection completes
+        std::unique_lock<std::mutex> lock(mtx);
+        cv.wait(lock, [&]() { return sample_count >= NUM_SAMPLES; });
+        imu.stopInterruptDrivenReading();
+    }
 
     auto end_bench = std::chrono::high_resolution_clock::now();
     std::chrono::duration<double> total_duration = end_bench - start_bench;
