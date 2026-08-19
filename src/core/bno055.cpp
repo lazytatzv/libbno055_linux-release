@@ -12,6 +12,9 @@
 #include <linux/i2c-dev.h>
 #include <linux/i2c.h>
 #include <linux/serial.h>
+#ifdef HAVE_LIBGPIOD
+#include <gpiod.h>
+#endif
 #endif
 #include <unistd.h>
 
@@ -111,13 +114,29 @@ enum Register : uint8_t {
     // Page 1 Registers
     ACC_CONFIG = 0x08,
     GYR_CONFIG_0 = 0x0A,
-    GYR_CONFIG_1 = 0x0B
+    GYR_CONFIG_1 = 0x0B,
+    // Page 1: Interrupt configuration (INT_MSK masks, INT_EN enables)
+    // Bit layout: [7:6]=Reserved, [5]=ACC_NM, [4]=ACC_AM, [3]=GYR_AM, [2]=GYR_HIGH_RATE, [1]=ACC_HIGH_G, [0]=DATA_READY
+    INT_MSK = 0x0F,
+    INT_EN = 0x10
 };
 
-// Power Modes
+// Power Modes (PWR_MODE register 0x3E)
 constexpr uint8_t POWER_MODE_NORMAL = 0x00;
 [[maybe_unused]] constexpr uint8_t POWER_MODE_LOWPOWER = 0x01;
 constexpr uint8_t POWER_MODE_SUSPEND = 0x02;
+
+// -----------------------------------------------------------------------
+// Datasheet-specified timing constants (Section 3.6.1 & Section 3.4)
+// -----------------------------------------------------------------------
+// Operating mode switch delays (after writing OPR_MODE register)
+constexpr int kModeToConfigDelayMs = 19;  // Any operation mode  → CONFIGMODE
+constexpr int kConfigToModeDelayMs = 7;   // CONFIGMODE → any operation mode
+// Software reset (SYS_TRIGGER bit 5) POR/boot timing
+// The BNO055 datasheet specifies ~650ms for POST completion after SW reset.
+// We sleep 600ms before polling to avoid NACK spam, then poll the rest.
+constexpr int kSoftResetPrePollDelayMs = 600;
+constexpr int kSoftResetPollBudgetMs = 500;
 
 #ifndef I2C_SLAVE
 #define I2C_SLAVE 0x0703
@@ -343,12 +362,12 @@ public:
             return false;
         }
 
-        // Reset
+        // Software reset. Datasheet: ~650ms POR boot time.
         if (!write8_raw(SYS_TRIGGER, 0x20)) return false;
-        std::this_thread::sleep_for(std::chrono::milliseconds(50));
+        std::this_thread::sleep_for(std::chrono::milliseconds(kSoftResetPrePollDelayMs));
 
-        // Wait boot after reset with timeout
-        timeout = 1000;
+        // Poll for CHIP_ID within remaining post-reset budget
+        timeout = kSoftResetPollBudgetMs;
         boot_ok = false;
         while (timeout > 0) {
             uint8_t chip_id = 0;
@@ -720,12 +739,14 @@ bool BNO055::begin(OpMode mode) {
     // Config Mode
     setMode(OpMode::Config);
 
-    // Reset
+    // Software reset (SYS_TRIGGER bit 5).
+    // Datasheet Section 3.4: POR boot requires ~650ms. Pre-wait before polling
+    // to avoid flooding the bus with NACKs during the chip's POST sequence.
     impl_->write8(SYS_TRIGGER, 0x20);
-    std::this_thread::sleep_for(std::chrono::milliseconds(50));
+    std::this_thread::sleep_for(std::chrono::milliseconds(kSoftResetPrePollDelayMs));
 
-    // Wait boot after reset with timeout (avoid infinite loop)
-    timeout = 1000;
+    // Poll for CHIP_ID within the remaining post-reset budget
+    timeout = kSoftResetPollBudgetMs;
     found = false;
     while (timeout > 0) {
         if (impl_->read8(CHIP_ID, id, 1) && id == BNO055_ID) {
@@ -759,20 +780,33 @@ bool BNO055::begin(OpMode mode) {
     // If the sensor is set to raw sensor mode (AMG), configure sub-sensors to maximum physical limits.
     // MUST be done in CONFIG mode before calling setMode!
     if (mode == OpMode::AMG) {
-        impl_->log(LogLevel::Info, "Overclocking physical sub-sensors: Accel -> 1kHz ODR, Gyro -> 2kHz ODR");
-        // Open Page 1 config space
+        impl_->log(LogLevel::Info, "AMG mode: overclocking sub-sensors to maximum physical ODR.");
+        // Must be done in CONFIGMODE before switching to AMG.
+        // NOTE: In any fusion mode (NDOF/IMUPlus/etc.) the firmware overrides
+        // ACC_CONFIG and GYR_CONFIG_x, so Page 1 tuning only takes effect in AMG.
+
+        // Open Page 1 configuration space
         impl_->write8(PAGE_ID, 1);
         std::this_thread::sleep_for(std::chrono::milliseconds(5));
 
-        // 1. Accel: ODR=1000Hz, Bandwidth=125Hz, Range=4g -> 0x0F
-        impl_->write8(ACC_CONFIG, 0x0F);
+        // 1. ACC_CONFIG (Page1 0x08)
+        //    Bits [6:5] = 00  → Normal power mode
+        //    Bits [4:2] = 111 → Bandwidth 1000 Hz  (datasheet Table 4-4)
+        //    Bits [1:0] = 01  → Range ±4g           (datasheet Table 4-3)
+        //    Value: 0b0_00_111_01 = 0x1D
+        impl_->write8(ACC_CONFIG, 0x1D);
         std::this_thread::sleep_for(std::chrono::milliseconds(5));
 
-        // 2. Gyro: ODR=2000Hz, Bandwidth=523Hz -> GYR_CONFIG_0 = 0x00
+        // 2. GYR_CONFIG_0 (Page1 0x0A)
+        //    Bits [7:5] = 000 → Range 2000 dps      (datasheet Table 4-16)
+        //    Bits [2:0] = 000 → Bandwidth 523 Hz    (datasheet Table 4-17, highest BW)
+        //    Value: 0x00
         impl_->write8(GYR_CONFIG_0, 0x00);
         std::this_thread::sleep_for(std::chrono::milliseconds(5));
 
-        // 3. Gyro Power: Normal mode -> GYR_CONFIG_1 = 0x00
+        // 3. GYR_CONFIG_1 (Page1 0x0B)
+        //    Bits [2:0] = 000 → Normal power mode   (datasheet Table 4-18)
+        //    Value: 0x00
         impl_->write8(GYR_CONFIG_1, 0x00);
         std::this_thread::sleep_for(std::chrono::milliseconds(5));
 
@@ -802,7 +836,14 @@ bool BNO055::reset() {
 void BNO055::setMode(OpMode mode) {
     impl_->mode_ = mode;
     impl_->write8(OPR_MODE, static_cast<uint8_t>(mode));
-    std::this_thread::sleep_for(std::chrono::milliseconds(30));
+    // Datasheet Section 3.6.1: mode-switch settling time.
+    // Any operation mode → CONFIGMODE requires 19 ms.
+    // CONFIGMODE → any operation mode requires 7 ms.
+    if (mode == OpMode::Config) {
+        std::this_thread::sleep_for(std::chrono::milliseconds(kModeToConfigDelayMs));
+    } else {
+        std::this_thread::sleep_for(std::chrono::milliseconds(kConfigToModeDelayMs));
+    }
 }
 
 OpMode BNO055::getMode() {
@@ -816,39 +857,26 @@ OpMode BNO055::getMode() {
 void BNO055::setAxisRemap(AxisMapConfig config) {
     impl_->axis_map_config_ = config;
     OpMode prev = impl_->mode_;
-    setMode(OpMode::Config);
-    std::this_thread::sleep_for(std::chrono::milliseconds(25));
+    setMode(OpMode::Config);  // waits kModeToConfigDelayMs (19ms)
     impl_->write8(AXIS_MAP_CONFIG, static_cast<uint8_t>(config));
-    std::this_thread::sleep_for(std::chrono::milliseconds(10));
-    setMode(prev);
-    std::this_thread::sleep_for(std::chrono::milliseconds(20));
+    setMode(prev);  // waits kConfigToModeDelayMs (7ms)
 }
 
 void BNO055::setAxisSign(AxisMapSign sign) {
     impl_->axis_map_sign_ = sign;
     OpMode prev = impl_->mode_;
-    setMode(OpMode::Config);
-    std::this_thread::sleep_for(std::chrono::milliseconds(25));
+    setMode(OpMode::Config);  // waits kModeToConfigDelayMs (19ms)
     impl_->write8(AXIS_MAP_SIGN, static_cast<uint8_t>(sign));
-    std::this_thread::sleep_for(std::chrono::milliseconds(10));
-    setMode(prev);
-    std::this_thread::sleep_for(std::chrono::milliseconds(20));
+    setMode(prev);  // waits kConfigToModeDelayMs (7ms)
 }
 
 void BNO055::setExtCrystalUse(bool use_xtal) {
     impl_->use_xtal_ = use_xtal;
     OpMode prev = impl_->mode_;
-    setMode(OpMode::Config);
-    std::this_thread::sleep_for(std::chrono::milliseconds(25));
+    setMode(OpMode::Config);  // waits kModeToConfigDelayMs (19ms)
     impl_->write8(PAGE_ID, 0);
-    if (use_xtal) {
-        impl_->write8(SYS_TRIGGER, 0x80);
-    } else {
-        impl_->write8(SYS_TRIGGER, 0x00);
-    }
-    std::this_thread::sleep_for(std::chrono::milliseconds(10));
-    setMode(prev);
-    std::this_thread::sleep_for(std::chrono::milliseconds(20));
+    impl_->write8(SYS_TRIGGER, use_xtal ? 0x80 : 0x00);
+    setMode(prev);  // waits kConfigToModeDelayMs (7ms)
 }
 
 Vector3 BNO055::getAccelerometer() {
@@ -885,6 +913,59 @@ std::optional<BNO055::RawSensorData> BNO055::getRawSensorDataNoexcept() noexcept
     // 3. Gyro: 1 dps = 16 LSB. Convert to rad/s (dps * M_PI / 180.0)
     constexpr float gyro_scale = (1.0f / 16.0f) * (static_cast<float>(M_PI) / 180.0f);
     data.gyro = parseVector3(buffer + 12, gyro_scale);
+
+    return data;
+}
+
+std::optional<BNO055::AllData> BNO055::getAllDataNoexcept() noexcept {
+    // Single 45-byte burst read covering all sensor output registers (0x08–0x34).
+    // 8× fewer I2C transactions compared to reading sensors individually.
+    //
+    // Register layout within the 45-byte buffer (offset from ACCEL_DATA_X_LSB = 0x08):
+    //   offset  0–5  : Accel X, Y, Z        (0x08–0x0D)  6 bytes
+    //   offset  6–11 : Mag   X, Y, Z        (0x0E–0x13)  6 bytes
+    //   offset 12–17 : Gyro  X, Y, Z        (0x14–0x19)  6 bytes
+    //   offset 18–23 : Euler H(yaw),R,P    (0x1A–0x1F)  6 bytes
+    //   offset 24–31 : Quaternion W,X,Y,Z  (0x20–0x27)  8 bytes
+    //   offset 32–37 : Linear Accel X,Y,Z  (0x28–0x2D)  6 bytes
+    //   offset 38–43 : Gravity X, Y, Z     (0x2E–0x33)  6 bytes
+    //   offset 44   : Temperature          (0x34)       1 byte
+    constexpr uint8_t kBurstLen = 45U;  // 0x34 - 0x08 + 1
+    uint8_t buffer[kBurstLen]{0};
+    if (!impl_->readLen(ACCEL_DATA_X_LSB, buffer, kBurstLen)) {
+        return std::nullopt;
+    }
+
+    AllData data;
+    // Accel: 1 m/s² = 100 LSB
+    data.accel = parseVector3(buffer, 1.0f / 100.0f);
+    // Mag: 1 µT = 16 LSB
+    data.mag = parseVector3(buffer + 6, 1.0f / 16.0f);
+    // Gyro: dps → rad/s
+    constexpr float kGyroScale = (1.0f / 16.0f) * (static_cast<float>(M_PI) / 180.0f);
+    data.gyro = parseVector3(buffer + 12, kGyroScale);
+    // Euler: register order is H(yaw) at +0, R(roll) at +2, P(pitch) at +4
+    //        mapped to Vector3 as x=Roll, y=Pitch, z=Yaw
+    constexpr float kEulerScale = (1.0f / 16.0f) * (static_cast<float>(M_PI) / 180.0f);
+    data.euler = Vector3{
+        static_cast<float>(read16_le(buffer + 20)) * kEulerScale,  // x = Roll
+        static_cast<float>(read16_le(buffer + 22)) * kEulerScale,  // y = Pitch
+        static_cast<float>(read16_le(buffer + 18)) * kEulerScale   // z = Yaw/Heading
+    };
+    // Quaternion: 1 = 2¹⁴ = 16384 LSB
+    constexpr float kQuatScale = 1.0f / 16384.0f;
+    data.quat = Quaternion{
+        static_cast<float>(read16_le(buffer + 24)) * kQuatScale,  // w
+        static_cast<float>(read16_le(buffer + 26)) * kQuatScale,  // x
+        static_cast<float>(read16_le(buffer + 28)) * kQuatScale,  // y
+        static_cast<float>(read16_le(buffer + 30)) * kQuatScale   // z
+    };
+    // Linear Accel: 1 m/s² = 100 LSB
+    data.linear_accel = parseVector3(buffer + 32, 1.0f / 100.0f);
+    // Gravity: 1 m/s² = 100 LSB
+    data.gravity = parseVector3(buffer + 38, 1.0f / 100.0f);
+    // Temperature: 1 °C = 1 LSB
+    data.temp = static_cast<int8_t>(buffer[44]);
 
     return data;
 }
@@ -1253,18 +1334,14 @@ bool BNO055::startAsyncReading(double rate_hz, AsyncDataCallback callback) {
         while (impl_->async_running_) {
             const auto start_time = std::chrono::steady_clock::now();
 
-            AllData data;
-            data.accel = getAccelerometerOrDefault();
-            data.mag = getMagnetometerOrDefault();
-            data.gyro = getGyroscopeOrDefault();
-            data.euler = getEulerAnglesOrDefault();
-            data.linear_accel = getLinearAccelerationOrDefault();
-            data.gravity = getGravityOrDefault();
-            data.quat = getQuaternionOrDefault();
-            data.temp = getTemperatureOrDefault();
-
-            if (impl_->async_callback_ && impl_->async_running_) {
-                impl_->async_callback_(data);
+            // Single 45-byte burst read: all sensor data in one I2C transaction.
+            auto all_opt = getAllDataNoexcept();
+            if (all_opt) {
+                if (impl_->async_callback_ && impl_->async_running_) {
+                    impl_->async_callback_(*all_opt);
+                }
+            } else {
+                impl_->log(LogLevel::Warning, "Async burst read failed");
             }
 
             // Auto-calibration save check
@@ -1386,7 +1463,83 @@ bool BNO055::startInterruptDrivenReading(int gpio_pin, RawAsyncDataCallback call
         }
 
 #ifdef __linux__
-        // 1. Export GPIO Pin if not already exported
+#ifdef HAVE_LIBGPIOD
+        // --- Modern libgpiod v2 character device GPIO IRQ implementation ---
+        // Derives gpiochip path from the global GPIO pin number.
+        // Chip 0 covers pins 0-based; adjust chip_index if your SoC has multiple chips.
+        const unsigned int line_offset = static_cast<unsigned int>(impl_->irq_gpio_pin_);
+        constexpr const char* chip_path = "/dev/gpiochip0";
+
+        gpiod_chip* chip = gpiod_chip_open(chip_path);
+        if (!chip) {
+            impl_->log(LogLevel::Error, "libgpiod: Failed to open " + std::string(chip_path));
+            impl_->irq_running_ = false;
+            return;
+        }
+
+        // Build edge event request for rising-edge detection
+        gpiod_line_settings* settings = gpiod_line_settings_new();
+        gpiod_line_settings_set_direction(settings, GPIOD_LINE_DIRECTION_INPUT);
+        gpiod_line_settings_set_edge_detection(settings, GPIOD_LINE_EDGE_RISING);
+        gpiod_line_settings_set_bias(settings, GPIOD_LINE_BIAS_PULL_DOWN);
+
+        gpiod_line_config* line_cfg = gpiod_line_config_new();
+        gpiod_line_config_add_line_settings(line_cfg, &line_offset, 1, settings);
+
+        gpiod_request_config* req_cfg = gpiod_request_config_new();
+        gpiod_request_config_set_consumer(req_cfg, "libbno055");
+
+        gpiod_line_request* request = gpiod_chip_request_lines(chip, req_cfg, line_cfg);
+
+        gpiod_request_config_free(req_cfg);
+        gpiod_line_config_free(line_cfg);
+        gpiod_line_settings_free(settings);
+
+        if (!request) {
+            impl_->log(LogLevel::Error,
+                       "libgpiod: Failed to request GPIO line " + std::to_string(impl_->irq_gpio_pin_));
+            gpiod_chip_close(chip);
+            impl_->irq_running_ = false;
+            return;
+        }
+
+        impl_->log(LogLevel::Info, "libgpiod: Monitoring GPIO line " + std::to_string(impl_->irq_gpio_pin_) +
+                                       " for rising-edge interrupts.");
+
+        constexpr int kBufCapacity = 4;
+        gpiod_edge_event_buffer* event_buf = gpiod_edge_event_buffer_new(kBufCapacity);
+
+        while (impl_->irq_running_) {
+            // Wait up to 100ms for an edge event, then re-check irq_running_
+            constexpr long long kTimeoutNs = 100'000'000LL;  // NOLINT(readability-magic-numbers)
+            int ret = gpiod_line_request_wait_edge_events(request, kTimeoutNs);
+            if (ret < 0) {
+                impl_->log(LogLevel::Warning, "libgpiod: wait_edge_events returned error, stopping IRQ thread.");
+                break;
+            }
+            if (ret == 0) {
+                // Timeout: no event, loop again to check irq_running_
+                continue;
+            }
+
+            // Drain all pending events in the buffer
+            int num_events = gpiod_line_request_read_edge_events(request, event_buf, kBufCapacity);
+            for (int i = 0; i < num_events; ++i) {
+                // Execute burst read immediately on each rising-edge interrupt
+                auto raw_opt = getRawSensorDataNoexcept();
+                if (raw_opt && impl_->irq_callback_ && impl_->irq_running_) {
+                    impl_->irq_callback_(*raw_opt);
+                }
+            }
+        }
+
+        gpiod_edge_event_buffer_free(event_buf);
+        gpiod_line_request_release(request);
+        gpiod_chip_close(chip);
+#else
+        // --- Legacy sysfs GPIO IRQ implementation (Linux < 5.10 fallback) ---
+        // Note: /sys/class/gpio is deprecated since Linux 5.10.
+        // Build with HAVE_LIBGPIOD (cmake: find_package(libgpiod)) to use the modern path.
         std::string pin_str = std::to_string(impl_->irq_gpio_pin_);
         std::ofstream export_file("/sys/class/gpio/export");
         if (export_file.is_open()) {
@@ -1396,7 +1549,6 @@ bool BNO055::startInterruptDrivenReading(int gpio_pin, RawAsyncDataCallback call
             std::this_thread::sleep_for(std::chrono::milliseconds(100));  // NOLINT(readability-magic-numbers)
         }
 
-        // 2. Set direction to 'in'
         std::string dir_path = "/sys/class/gpio/gpio" + pin_str + "/direction";
         std::ofstream dir_file(dir_path);
         if (dir_file.is_open()) {
@@ -1404,7 +1556,6 @@ bool BNO055::startInterruptDrivenReading(int gpio_pin, RawAsyncDataCallback call
             dir_file.close();
         }
 
-        // 3. Configure rising edge trigger
         std::string edge_path = "/sys/class/gpio/gpio" + pin_str + "/edge";
         std::ofstream edge_file(edge_path);
         if (edge_file.is_open()) {
@@ -1412,56 +1563,48 @@ bool BNO055::startInterruptDrivenReading(int gpio_pin, RawAsyncDataCallback call
             edge_file.close();
         }
 
-        // 4. Open value file for polling
-        std::string val_path = "/sys/class/gpio/gpio" + pin_str + "/value";
-        int val_fd = ::open(val_path.c_str(), O_RDONLY | O_NONBLOCK);
-        if (val_fd < 0) {
+        std::string gpio_val_path = "/sys/class/gpio/gpio" + std::to_string(impl_->irq_gpio_pin_) + "/value";
+        int gpio_fd = open(gpio_val_path.c_str(), O_RDONLY);
+        if (gpio_fd < 0) {
             impl_->log(LogLevel::Error, "Failed to open GPIO value sysfs file for interrupt monitoring");
             impl_->irq_running_ = false;
             return;
         }
 
-        // Clear initial state
         char dummy;
-        if (::read(val_fd, &dummy, 1) < 0) {  // NOLINT(readability-magic-numbers)
+        if (::read(gpio_fd, &dummy, 1) < 0) {  // NOLINT(readability-magic-numbers)
             // Ignore error
         }
 
         struct pollfd pfd;
-        pfd.fd = val_fd;
+        pfd.fd = gpio_fd;
         pfd.events = POLLPRI | POLLERR;
 
         while (impl_->irq_running_) {
-            // Wait for edge interrupt event with a 100ms timeout to periodically check if stopped
             int num_events = ::poll(&pfd, 1, 100);  // NOLINT(readability-magic-numbers)
             if (num_events > 0) {
                 if (pfd.revents & POLLPRI) {
-                    // Seek back to start to clear interrupt flag
-                    ::lseek(val_fd, 0, SEEK_SET);
-                    if (::read(val_fd, &dummy, 1) < 0) {  // NOLINT(readability-magic-numbers)
+                    ::lseek(gpio_fd, 0, SEEK_SET);
+                    if (::read(gpio_fd, &dummy, 1) < 0) {  // NOLINT(readability-magic-numbers)
                         // Ignore error
                     }
-
-                    // Execute burst read Immediately on interrupt
                     auto raw_opt = getRawSensorDataNoexcept();
-                    if (raw_opt) {
-                        if (impl_->irq_callback_ && impl_->irq_running_) {
-                            impl_->irq_callback_(*raw_opt);
-                        }
+                    if (raw_opt && impl_->irq_callback_ && impl_->irq_running_) {
+                        impl_->irq_callback_(*raw_opt);
                     }
                 }
             }
         }
 
-        ::close(val_fd);
+        ::close(gpio_fd);
 
-        // Clean up: Unexport GPIO Pin
         std::ofstream unexport_file("/sys/class/gpio/unexport");
         if (unexport_file.is_open()) {
             unexport_file << pin_str;
             unexport_file.close();
         }
-#endif
+#endif  // HAVE_LIBGPIOD
+#endif  // __linux__
         impl_->log(LogLevel::Info, "Hardware interrupt waiting thread stopped.");
     });
 

@@ -236,6 +236,7 @@ ros2 launch libbno055_linux bno055_launch.py params_file:=/path/to/your/custom_p
 Verify that the IMU data is streaming correctly:
 ```bash
 ros2 topic echo /imu/data
+ros2 topic echo /imu/euler
 ```
 
 ---

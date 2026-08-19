@@ -120,13 +120,13 @@ ros2 launch libbno055_linux bno055_launch.py
 
 ## Documentation
 
-- **[API Reference](docs/API_REFERENCE.md)**: Full class and function reference for C++, C, Python, and Rust.
-- **[Integration & Tuning Guide](docs/INTEGRATION.md)**: ROS 2 YAML parameters, EKF setup, 400kHz I2C, UART 921600 bps tuning, and Rust integration.
-- **[Architecture & Design](docs/ARCHITECTURE.md)**: PIMPL design, zero-copy transport, FFI layers, and state machines.
-- **[Troubleshooting & FAQ](docs/TROUBLESHOOTING.md)**: Hardware wiring, permissions, and clock-stretching fixes.
+- **[API Reference](https://github.com/lazytatzv/libbno055-linux/blob/main/docs/API_REFERENCE.md)**: Full class and function reference for C++, C, Python, and Rust.
+- **[Integration & Tuning Guide](https://github.com/lazytatzv/libbno055-linux/blob/main/docs/INTEGRATION.md)**: ROS 2 YAML parameters, EKF setup, 400kHz I2C, UART 921600 bps tuning, and Rust integration.
+- **[Architecture & Design](https://github.com/lazytatzv/libbno055-linux/blob/main/docs/ARCHITECTURE.md)**: PIMPL design, zero-copy transport, FFI layers, and state machines.
+- **[Troubleshooting & FAQ](https://github.com/lazytatzv/libbno055-linux/blob/main/docs/TROUBLESHOOTING.md)**: Hardware wiring, permissions, and clock-stretching fixes.
 
 ---
 
 ## License
 
-This project is released under the [MIT License](LICENSE).
+This project is released under the [MIT License](https://github.com/lazytatzv/libbno055-linux/blob/main/LICENSE).
