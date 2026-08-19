@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.10)
-project(libbno055_linux VERSION 1.7.2 LANGUAGES CXX C)
+project(libbno055_linux VERSION 1.9.0 LANGUAGES CXX C)
 
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -25,6 +25,31 @@ set_target_properties(libbno055-linux PROPERTIES
     PREFIX ""
     VERSION ${PROJECT_VERSION}
     SOVERSION ${PROJECT_VERSION_MAJOR}
+)
+
+# Automatically sync rust/cpp/ bundled C++ sources with the main source tree.
+# This prevents source drift between the Rust crate's embedded copy and the canonical source.
+add_custom_command(TARGET libbno055-linux POST_BUILD
+    COMMAND ${CMAKE_COMMAND} -E copy_if_different
+        ${CMAKE_CURRENT_SOURCE_DIR}/src/core/bno055.cpp
+        ${CMAKE_CURRENT_SOURCE_DIR}/rust/cpp/src/bno055.cpp
+    COMMAND ${CMAKE_COMMAND} -E copy_if_different
+        ${CMAKE_CURRENT_SOURCE_DIR}/src/core/bno055_c.cpp
+        ${CMAKE_CURRENT_SOURCE_DIR}/rust/cpp/src/bno055_c.cpp
+    COMMAND ${CMAKE_COMMAND} -E copy_if_different
+        ${CMAKE_CURRENT_SOURCE_DIR}/include/libbno055-linux/bno055.hpp
+        ${CMAKE_CURRENT_SOURCE_DIR}/rust/cpp/include/libbno055-linux/bno055.hpp
+    COMMAND ${CMAKE_COMMAND} -E copy_if_different
+        ${CMAKE_CURRENT_SOURCE_DIR}/include/libbno055-linux/bno055_c.h
+        ${CMAKE_CURRENT_SOURCE_DIR}/rust/cpp/include/libbno055-linux/bno055_c.h
+    COMMAND ${CMAKE_COMMAND} -E copy_if_different
+        ${CMAKE_CURRENT_SOURCE_DIR}/include/libbno055-linux/transport.hpp
+        ${CMAKE_CURRENT_SOURCE_DIR}/rust/cpp/include/libbno055-linux/transport.hpp
+    COMMAND ${CMAKE_COMMAND} -E copy_if_different
+        ${CMAKE_CURRENT_SOURCE_DIR}/include/libbno055-linux/mock_transport.hpp
+        ${CMAKE_CURRENT_SOURCE_DIR}/rust/cpp/include/libbno055-linux/mock_transport.hpp
+    COMMENT "Syncing rust/cpp/ bundled sources with main source tree"
+    VERBATIM
 )
 if(ENABLE_CLANG_TIDY AND CLANG_TIDY_EXE)
     set_target_properties(libbno055-linux PROPERTIES
@@ -58,6 +83,24 @@ endif()
 # Dependencies
 find_package(Threads REQUIRED)
 target_link_libraries(libbno055-linux PRIVATE Threads::Threads)
+
+# Optional: libgpiod for modern GPIO IRQ support (replaces deprecated sysfs /sys/class/gpio)
+# Required: libgpiod >= 2.0 (gpiod_chip_open / gpiod_line_request API)
+# Ubuntu/Debian: sudo apt install libgpiod-dev
+# Arch Linux:    sudo pacman -S libgpiod
+find_package(PkgConfig QUIET)
+if(PkgConfig_FOUND)
+    pkg_check_modules(LIBGPIOD QUIET libgpiod>=2.0)
+endif()
+if(LIBGPIOD_FOUND)
+    message(STATUS "libgpiod ${LIBGPIOD_VERSION} found -- enabling modern character device GPIO IRQ support.")
+    target_compile_definitions(libbno055-linux PRIVATE HAVE_LIBGPIOD)
+    target_include_directories(libbno055-linux PRIVATE ${LIBGPIOD_INCLUDE_DIRS})
+    target_link_libraries(libbno055-linux PRIVATE ${LIBGPIOD_LIBRARIES})
+else()
+    message(STATUS "libgpiod not found -- falling back to legacy sysfs GPIO (deprecated since Linux 5.10).")
+    message(STATUS "Install libgpiod >= 2.0 to enable the modern GPIO character device IRQ path.")
+endif()
 
 # Example executables
 option(BUILD_EXAMPLES "Build example executables" ON)
@@ -110,8 +153,11 @@ find_package(sensor_msgs QUIET)
 find_package(geometry_msgs QUIET)
 find_package(diagnostic_msgs QUIET)
 find_package(std_srvs QUIET)
+find_package(tf2 QUIET)
+find_package(tf2_ros QUIET)
+find_package(tf2_geometry_msgs QUIET)
 
-if(rclcpp_FOUND AND sensor_msgs_FOUND AND geometry_msgs_FOUND AND diagnostic_msgs_FOUND AND std_srvs_FOUND)
+if(rclcpp_FOUND AND sensor_msgs_FOUND AND geometry_msgs_FOUND AND diagnostic_msgs_FOUND AND std_srvs_FOUND AND tf2_ros_FOUND)
     find_package(ament_cmake REQUIRED)
     set(ament_cmake_copyright_FOUND TRUE)
     set(ament_cmake_cpplint_FOUND TRUE)
@@ -127,8 +173,11 @@ if(rclcpp_FOUND AND sensor_msgs_FOUND AND geometry_msgs_FOUND AND diagnostic_msg
         libbno055-linux
         rclcpp::rclcpp
         ${sensor_msgs_TARGETS}
+        ${geometry_msgs_TARGETS}
         ${diagnostic_msgs_TARGETS}
         ${std_srvs_TARGETS}
+        ${tf2_ros_TARGETS}
+        ${tf2_geometry_msgs_TARGETS}
     )
 
     add_executable(bno055_heading_control_node src/ros2/ros2_heading_control_node.cpp)
@@ -155,8 +204,11 @@ if(rclcpp_FOUND AND sensor_msgs_FOUND AND geometry_msgs_FOUND AND diagnostic_msg
             rclcpp::rclcpp
             rclcpp_components::component
             ${sensor_msgs_TARGETS}
+            ${geometry_msgs_TARGETS}
             ${diagnostic_msgs_TARGETS}
             ${std_srvs_TARGETS}
+            ${tf2_ros_TARGETS}
+            ${tf2_geometry_msgs_TARGETS}
         )
         rclcpp_components_register_node(bno055_ros2_components PLUGIN "bno055_ros2::BNO055PublisherNode" EXECUTABLE bno055_publisher_node_container)
 
@@ -189,8 +241,11 @@ if(rclcpp_FOUND AND sensor_msgs_FOUND AND geometry_msgs_FOUND AND diagnostic_msg
             rclcpp::rclcpp
             rclcpp_lifecycle::rclcpp_lifecycle
             ${sensor_msgs_TARGETS}
+            ${geometry_msgs_TARGETS}
             ${diagnostic_msgs_TARGETS}
             ${std_srvs_TARGETS}
+            ${tf2_ros_TARGETS}
+            ${tf2_geometry_msgs_TARGETS}
         )
 
         add_executable(bno055_lifecycle_heading_control_node src/ros2/ros2_lifecycle_heading_control_node.cpp)
@@ -219,8 +274,11 @@ if(rclcpp_FOUND AND sensor_msgs_FOUND AND geometry_msgs_FOUND AND diagnostic_msg
                 rclcpp_lifecycle::rclcpp_lifecycle
                 rclcpp_components::component
                 ${sensor_msgs_TARGETS}
+                ${geometry_msgs_TARGETS}
                 ${diagnostic_msgs_TARGETS}
                 ${std_srvs_TARGETS}
+                ${tf2_ros_TARGETS}
+                ${tf2_geometry_msgs_TARGETS}
             )
             rclcpp_components_register_node(bno055_ros2_lifecycle_components PLUGIN "bno055_ros2::BNO055LifecyclePublisherNode" EXECUTABLE bno055_lifecycle_publisher_node_container)
 

@@ -341,6 +341,73 @@ impl BNO055 {
         }
         self.irq_callback = None;
     }
+
+    pub fn set_ext_crystal_use(&mut self, use_xtal: bool) {
+        unsafe { sys::bno055_set_ext_crystal_use(self.handle, use_xtal) }
+    }
+
+    pub fn get_linear_acceleration(&self) -> Option<Vector3> {
+        let mut raw = sys::bno055_vector3_t { x: 0.0, y: 0.0, z: 0.0 };
+        if unsafe { sys::bno055_get_linear_acceleration(self.handle, &mut raw) } {
+            Some(Vector3 { x: raw.x, y: raw.y, z: raw.z })
+        } else {
+            None
+        }
+    }
+
+    pub fn get_gravity(&self) -> Option<Vector3> {
+        let mut raw = sys::bno055_vector3_t { x: 0.0, y: 0.0, z: 0.0 };
+        if unsafe { sys::bno055_get_gravity(self.handle, &mut raw) } {
+            Some(Vector3 { x: raw.x, y: raw.y, z: raw.z })
+        } else {
+            None
+        }
+    }
+
+    pub fn get_temperature(&self) -> Option<i8> {
+        let mut temp: i8 = 0;
+        if unsafe { sys::bno055_get_temperature(self.handle, &mut temp) } {
+            Some(temp)
+        } else {
+            None
+        }
+    }
+
+    pub fn is_fully_calibrated(&self) -> bool {
+        unsafe { sys::bno055_is_fully_calibrated(self.handle) }
+    }
+
+    pub fn save_calibration_file(&self, filepath: &str) -> bool {
+        match CString::new(filepath) {
+            Ok(path) => unsafe { sys::bno055_save_calibration_file(self.handle, path.as_ptr()) },
+            Err(_) => false,
+        }
+    }
+
+    pub fn load_calibration_file(&mut self, filepath: &str) -> bool {
+        match CString::new(filepath) {
+            Ok(path) => unsafe { sys::bno055_load_calibration_file(self.handle, path.as_ptr()) },
+            Err(_) => false,
+        }
+    }
+
+    pub fn enable_auto_calibration(&mut self, filepath: &str) {
+        if let Ok(path) = CString::new(filepath) {
+            unsafe { sys::bno055_enable_auto_calibration(self.handle, path.as_ptr()) };
+        }
+    }
+
+    pub fn disable_auto_calibration(&mut self) {
+        unsafe { sys::bno055_disable_auto_calibration(self.handle) }
+    }
+
+    pub fn enter_suspend_mode(&mut self) {
+        unsafe { sys::bno055_enter_suspend_mode(self.handle) }
+    }
+
+    pub fn enter_normal_mode(&mut self) {
+        unsafe { sys::bno055_enter_normal_mode(self.handle) }
+    }
 }
 
 impl Drop for BNO055 {
