@@ -14,7 +14,7 @@ jobs:
     runs-on: ${{ matrix.os }}
     strategy:
       matrix:
-        os: [ubuntu-latest, macos-latest]
+        os: [ubuntu-latest, ubuntu-24.04-arm, macos-latest]
 
     steps:
       - uses: actions/checkout@v4
@@ -23,21 +23,21 @@ jobs:
         if: startsWith(matrix.os, 'ubuntu')
         run: |
           sudo apt-get update
-          sudo apt-get install -y clang-tidy clang-format
+          sudo apt-get install -y clang-tidy clang-format libgpiod-dev
 
       - name: Auto-fix code formatting (clang-format)
-        if: startsWith(matrix.os, 'ubuntu')
+        if: matrix.os == 'ubuntu-latest'
         run: |
           find include src tests -name "*.cpp" -o -name "*.hpp" | xargs clang-format -i
 
       - name: Auto-commit formatted code
-        if: startsWith(matrix.os, 'ubuntu')
+        if: matrix.os == 'ubuntu-latest'
         uses: stefanzweifel/git-auto-commit-action@v5
         with:
           commit_message: "style: auto-format code using clang-format [skip ci]"
 
       - name: Configure CMake
-        run: cmake -S . -B build -DBUILD_TESTING=ON -DENABLE_CLANG_TIDY=ON
+        run: cmake -S . -B build -DBUILD_TESTING=ON -DENABLE_CLANG_TIDY=${{ startsWith(matrix.os, 'ubuntu') && 'ON' || 'OFF' }}
 
       - name: Build
         run: cmake --build build --config Release
@@ -66,7 +66,7 @@ jobs:
       - name: Install dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y lcov
+          sudo apt-get install -y lcov libgpiod-dev
 
       - name: Configure with coverage flags
         run: cmake -S . -B build -DBUILD_TESTING=ON -DENABLE_CLANG_TIDY=OFF -DCMAKE_BUILD_TYPE=Debug -DCMAKE_CXX_FLAGS="--coverage -fprofile-arcs -ftest-coverage"
@@ -112,7 +112,7 @@ jobs:
       - name: Install dependencies
         run: |
           apt-get update
-          apt-get install -y python3-colcon-common-extensions git
+          apt-get install -y python3-colcon-common-extensions git libgpiod-dev
           rosdep update
           rosdep install --from-paths src --ignore-src -y --rosdistro ${{ matrix.ros_distro }}
 

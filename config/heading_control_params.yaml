@@ -26,7 +26,13 @@ bno055_heading_control_node:
     angular_deadband: 0.01             # Turning threshold (rad/s) to disengage heading lock
 
     # --------------------------------------------------------------------------
-    # 3. Safety Watchdog & Fail-Safe Protection
+    # 3. IMU Coordinate Alignment & Adaptive Scaling
+    # --------------------------------------------------------------------------
+    yaw_axis: "x"                      # Axis corresponding to physical Yaw rotation ("x", "y", or "z")
+    max_translation_speed: 1.0         # Max expected speed (m/s) to scale down correction at low speeds
+
+    # --------------------------------------------------------------------------
+    # 4. Safety Watchdog & Fail-Safe Protection
     # --------------------------------------------------------------------------
     cmd_vel_timeout: 0.5               # Command loss timeout (s). Triggers Zero Velocity stop
     imu_timeout: 1.0                   # IMU loss timeout (s). Triggers Fail-Safe Passthrough
