@@ -317,7 +317,7 @@ TEST_F(BNO055MockTest, HardwareOverclockingInAMGMode) {
                 page1_selected = false;
         }
         if (page1_selected) {
-            if (reg == 0x08 && value == 0x0F) {  // ACC_CONFIG NOLINT(readability-magic-numbers)
+            if (reg == 0x08 && value == 0x1D) {  // ACC_CONFIG 1000Hz BW + ±4g (datasheet Tables 4-3, 4-4)
                 accel_overclocked = true;
             }
             if (reg == 0x0A && value == 0x00) {  // GYR_CONFIG_0 NOLINT(readability-magic-numbers)

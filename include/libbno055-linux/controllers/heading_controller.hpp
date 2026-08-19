@@ -150,9 +150,13 @@ public:
 
         // 4. Trapezoidal Rule Integration & Anti-Windup
         if (BNO055_LIKELY(initialized_)) {
-            const double trapezoidal_error = (out.error_deg + prev_error_) * 0.5;
-            i_term_ =
-                std::clamp(i_term_ + config_.ki * trapezoidal_error * dt, -config_.max_i_term, config_.max_i_term);
+            if (config_.ki == 0.0) {
+                i_term_ = 0.0;
+            } else {
+                const double trapezoidal_error = (out.error_deg + prev_error_) * 0.5;
+                i_term_ =
+                    std::clamp(i_term_ + config_.ki * trapezoidal_error * dt, -config_.max_i_term, config_.max_i_term);
+            }
         }
 
         // 5. 1st-Order Low-Pass Filtered Gyro Rate for D-Term
