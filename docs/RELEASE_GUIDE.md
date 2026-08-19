@@ -4,47 +4,26 @@ This document serves as a cheat sheet for the maintainer on how to release a new
 
 ## 1. Bump the Version
 
-Before releasing, you must increment the version number in all package managers and documentation.
+Updating the version across all 7 configuration files is now fully automated! You have two options:
 
-1. **Update `CMakeLists.txt`**:
-   ```cmake
-   project(libbno055_linux VERSION X.Y.Z LANGUAGES CXX)
-   ```
-2. **Update `package.xml`**:
-   ```xml
-   <version>X.Y.Z</version>
-   ```
-3. **Update `vcpkg.json`**:
-   ```json
-   "version": "X.Y.Z"
-   ```
-4. **Update `conanfile.py`**:
-   ```python
-   version = "X.Y.Z"
-   ```
-5. **Update `setup.py`**:
-   ```python
-   version="X.Y.Z"
-   ```
-6. **Update `rust/Cargo.toml`**:
-   ```toml
-   version = "X.Y.Z"
-   ```
-7. **Update `CHANGELOG.md`**:
-   Add a new section for `## [X.Y.Z] - YYYY-MM-DD` detailing the changes.
-8. **Update `debian/changelog`**:
-   ```bash
-   dch -v X.Y.Z-1 "Release version X.Y.Z"
-   ```
-   *(Or edit manually following the existing format).*
+### Option A: Via GitHub UI (Recommended)
+1. Go to **Actions ➔ Release ➔ Run workflow**.
+2. Input the new version (e.g. `1.9.0`) and click **Run workflow**.
+3. Actions will automatically update all configuration files, commit, tag (`v1.9.0`), create a GitHub Release, and publish to PyPI and crates.io.
 
-Commit and push these changes, then cut a new Git tag:
+### Option B: Via Local Script
+Run the automated version bump script before committing:
 ```bash
-git add .
-git commit -m "chore: bump version to X.Y.Z"
-git push
-git tag -a vX.Y.Z -m "Release vX.Y.Z"
-git push origin vX.Y.Z
+./scripts/bump_version.sh 1.9.0
+```
+This updates `CMakeLists.txt`, `package.xml`, `setup.py`, `Cargo.toml`, `conanfile.py`, `vcpkg.json`, and `README.md` instantly.
+
+Then commit and push:
+```bash
+git add -A
+git commit -m "chore: bump version to 1.9.0"
+git tag -a v1.9.0 -m "Release v1.9.0"
+git push origin main --tags
 ```
 
 ---

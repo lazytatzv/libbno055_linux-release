@@ -28,6 +28,30 @@ PYBIND11_MODULE(libbno055, m) {
         .value("NDOF", OpMode::NDOF)
         .export_values();
 
+    // AxisMapConfig enum (datasheet Table 3-37 placements P0-P7)
+    py::enum_<AxisMapConfig>(m, "AxisMapConfig")
+        .value("P0", AxisMapConfig::P0)
+        .value("P1", AxisMapConfig::P1)
+        .value("P2", AxisMapConfig::P2)
+        .value("P3", AxisMapConfig::P3)
+        .value("P4", AxisMapConfig::P4)
+        .value("P5", AxisMapConfig::P5)
+        .value("P6", AxisMapConfig::P6)
+        .value("P7", AxisMapConfig::P7)
+        .export_values();
+
+    // AxisMapSign enum (datasheet Table 3-37 placements P0-P7)
+    py::enum_<AxisMapSign>(m, "AxisMapSign")
+        .value("P0", AxisMapSign::P0)
+        .value("P1", AxisMapSign::P1)
+        .value("P2", AxisMapSign::P2)
+        .value("P3", AxisMapSign::P3)
+        .value("P4", AxisMapSign::P4)
+        .value("P5", AxisMapSign::P5)
+        .value("P6", AxisMapSign::P6)
+        .value("P7", AxisMapSign::P7)
+        .export_values();
+
     // Vector3 struct
     py::class_<Vector3>(m, "Vector3")
         .def(py::init<float, float, float>(), py::arg("x") = 0.0f, py::arg("y") = 0.0f, py::arg("z") = 0.0f)
@@ -79,7 +103,29 @@ PYBIND11_MODULE(libbno055, m) {
     py::class_<BNO055::RawSensorData>(m, "RawSensorData")
         .def_readwrite("accel", &BNO055::RawSensorData::accel)
         .def_readwrite("mag", &BNO055::RawSensorData::mag)
-        .def_readwrite("gyro", &BNO055::RawSensorData::gyro);
+        .def_readwrite("gyro", &BNO055::RawSensorData::gyro)
+        .def("__repr__", [](const BNO055::RawSensorData& r) {
+            return "<RawSensorData accel=(" + std::to_string(r.accel.x) + "," + std::to_string(r.accel.y) + "," +
+                   std::to_string(r.accel.z) + ") mag=(" + std::to_string(r.mag.x) + "," + std::to_string(r.mag.y) +
+                   "," + std::to_string(r.mag.z) + ") gyro=(" + std::to_string(r.gyro.x) + "," +
+                   std::to_string(r.gyro.y) + "," + std::to_string(r.gyro.z) + ")>";
+        });
+
+    // AllData struct — full snapshot of all sensor outputs from a single burst read
+    py::class_<BNO055::AllData>(m, "AllData")
+        .def(py::init<>())
+        .def_readwrite("accel", &BNO055::AllData::accel)
+        .def_readwrite("mag", &BNO055::AllData::mag)
+        .def_readwrite("gyro", &BNO055::AllData::gyro)
+        .def_readwrite("euler", &BNO055::AllData::euler)
+        .def_readwrite("linear_accel", &BNO055::AllData::linear_accel)
+        .def_readwrite("gravity", &BNO055::AllData::gravity)
+        .def_readwrite("quat", &BNO055::AllData::quat)
+        .def_readwrite("temp", &BNO055::AllData::temp)
+        .def("__repr__", [](const BNO055::AllData& d) {
+            return "<AllData accel=(" + std::to_string(d.accel.x) + "," + std::to_string(d.accel.y) + "," +
+                   std::to_string(d.accel.z) + ") temp=" + std::to_string(static_cast<int>(d.temp)) + ">";
+        });
 
     // BNO055 class
     py::class_<BNO055>(m, "BNO055")
@@ -89,7 +135,11 @@ PYBIND11_MODULE(libbno055, m) {
         .def("set_mode", &BNO055::setMode, py::arg("mode"))
         .def("get_mode", &BNO055::getMode)
         .def("set_ext_crystal_use", &BNO055::setExtCrystalUse, py::arg("use_xtal"))
-        // Data getters (noexcept std::optional bindings)
+        .def("set_axis_remap", &BNO055::setAxisRemap, py::arg("config"),
+             "Set axis remapping (P0-P7 per datasheet Table 3-37). Must call in CONFIGMODE or will auto-switch.")
+        .def("set_axis_sign", &BNO055::setAxisSign, py::arg("sign"),
+             "Set axis sign remapping (P0-P7 per datasheet Table 3-37).")
+        // Sensor data getters (noexcept std::optional bindings)
         .def("get_accelerometer", &BNO055::getAccelerometerNoexcept)
         .def("get_magnetometer", &BNO055::getMagnetometerNoexcept)
         .def("get_gyroscope", &BNO055::getGyroscopeNoexcept)
@@ -99,6 +149,9 @@ PYBIND11_MODULE(libbno055, m) {
         .def("get_quaternion", &BNO055::getQuaternionNoexcept)
         .def("get_temperature", &BNO055::getTemperatureNoexcept)
         .def("get_raw_sensor_data", &BNO055::getRawSensorDataNoexcept)
+        .def("get_all_data", &BNO055::getAllDataNoexcept,
+             "Single 45-byte burst read returning all sensor outputs atomically. "
+             "8x fewer I2C transactions vs reading sensors individually.")
         // Calibration & Diagnostics
         .def("get_calibration_status",
              [](BNO055& self) {
@@ -131,12 +184,67 @@ PYBIND11_MODULE(libbno055, m) {
                  } catch (...) {
                  }
              })
-        .def("enter_normal_mode", [](BNO055& self) {
-            try {
-                self.enterNormalMode();
-            } catch (...) {
-            }
-        });
+        .def("enter_normal_mode",
+             [](BNO055& self) {
+                 try {
+                     self.enterNormalMode();
+                 } catch (...) {
+                 }
+             })
+        // ------------------------------------------------------------------
+        // Async / Interrupt-driven reading APIs
+        // NOTE: Callbacks are invoked from a C++ background thread.
+        //       GIL is acquired inside the lambda before calling Python.
+        // ------------------------------------------------------------------
+        .def(
+            "start_async_reading",
+            [](BNO055& self, double rate_hz, py::object callback) -> bool {
+                auto py_cb = std::make_shared<py::object>(std::move(callback));
+                return self.startAsyncReading(rate_hz, [py_cb](const BNO055::AllData& data) {
+                    py::gil_scoped_acquire acquire;
+                    try {
+                        (*py_cb)(data);
+                    } catch (py::error_already_set& e) {
+                        e.restore();
+                    }
+                });
+            },
+            py::arg("rate_hz"), py::arg("callback"), py::call_guard<py::gil_scoped_release>(),
+            "Start background async polling at rate_hz Hz. Callback(AllData) called from C++ thread with GIL held.")
+        .def("stop_async_reading", &BNO055::stopAsyncReading, "Stop the background async reading thread.")
+        .def(
+            "start_raw_async_reading",
+            [](BNO055& self, double rate_hz, py::object callback) -> bool {
+                auto py_cb = std::make_shared<py::object>(std::move(callback));
+                return self.startRawAsyncReading(rate_hz, [py_cb](const BNO055::RawSensorData& data) {
+                    py::gil_scoped_acquire acquire;
+                    try {
+                        (*py_cb)(data);
+                    } catch (py::error_already_set& e) {
+                        e.restore();
+                    }
+                });
+            },
+            py::arg("rate_hz"), py::arg("callback"), py::call_guard<py::gil_scoped_release>(),
+            "Start background raw burst async reading at rate_hz Hz. Callback(RawSensorData) called from C++ thread.")
+        .def("stop_raw_async_reading", &BNO055::stopRawAsyncReading, "Stop the background raw async reading thread.")
+        .def(
+            "start_interrupt_driven_reading",
+            [](BNO055& self, int gpio_pin, py::object callback) -> bool {
+                auto py_cb = std::make_shared<py::object>(std::move(callback));
+                return self.startInterruptDrivenReading(gpio_pin, [py_cb](const BNO055::RawSensorData& data) {
+                    py::gil_scoped_acquire acquire;
+                    try {
+                        (*py_cb)(data);
+                    } catch (py::error_already_set& e) {
+                        e.restore();
+                    }
+                });
+            },
+            py::arg("gpio_pin"), py::arg("callback"), py::call_guard<py::gil_scoped_release>(),
+            "Start GPIO IRQ-driven reading on gpio_pin (libgpiod). Callback(RawSensorData) fires on rising edge.")
+        .def("stop_interrupt_driven_reading", &BNO055::stopInterruptDrivenReading,
+             "Stop the GPIO IRQ-driven reading thread.");
 
     // Utility function
     m.def("to_euler_degrees", &toEulerDegrees, py::arg("q"), "Convert Quaternion to Euler angles in degrees");
