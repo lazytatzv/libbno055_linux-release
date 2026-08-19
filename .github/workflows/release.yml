@@ -4,6 +4,12 @@ on:
   push:
     tags:
       - 'v*'
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'New version to release (e.g. 1.9.0)'
+        required: true
+        type: string
 
 permissions:
   contents: write
@@ -19,9 +25,31 @@ jobs:
         with:
           fetch-depth: 0
 
+      - name: Auto-bump version (if triggered manually)
+        if: github.event_name == 'workflow_dispatch'
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.net"
+          NEW_VER="${{ inputs.version }}"
+          NEW_VER="${NEW_VER#v}"
+          chmod +x scripts/bump_version.sh
+          ./scripts/bump_version.sh "$NEW_VER"
+          git add -A
+          git commit -m "chore: bump version to ${NEW_VER}"
+          git tag -a "v${NEW_VER}" -m "Release v${NEW_VER}"
+          git push origin main --tags
+
       - name: Extract version from tag
         id: version
-        run: echo "VERSION=${GITHUB_REF_NAME#v}" >> $GITHUB_OUTPUT
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            TAG_NAME="v${{ inputs.version }}"
+            TAG_NAME="${TAG_NAME#vv}"
+          else
+            TAG_NAME="${GITHUB_REF_NAME}"
+          fi
+          echo "TAG_NAME=${TAG_NAME}" >> $GITHUB_OUTPUT
+          echo "VERSION=${TAG_NAME#v}" >> $GITHUB_OUTPUT
 
       - name: Extract changelog for this version
         id: changelog
@@ -37,8 +65,8 @@ jobs:
         id: create_release
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: ${{ github.ref_name }}
-          name: Release ${{ github.ref_name }}
+          tag_name: ${{ steps.version.outputs.TAG_NAME }}
+          name: Release ${{ steps.version.outputs.TAG_NAME }}
           body: ${{ steps.changelog.outputs.NOTES }}
           draft: false
           prerelease: ${{ contains(github.ref_name, '-') }}
