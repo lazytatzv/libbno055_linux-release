@@ -89,3 +89,17 @@ You can verify the current node state with:
 ```bash
 ros2 lifecycle get /bno055_lifecycle_publisher_node
 ```
+
+---
+
+## C++ Standard & Legacy Environment Compatibility
+
+### Compilation Error with C++11 / C++14
+**Error**: `error: ‘optional’ in namespace ‘std’ does not name a type` or `error: ‘string_view’ in namespace ‘std’ does not name a type`
+**Cause**: The native C++ API (`bno055.hpp`) uses modern C++17 features (`std::optional`, `std::string_view`, structured bindings).
+**Solution**:
+1. **Target C++17 in your C++ project**:
+   Set `set(CMAKE_CXX_STANDARD 17)` in your `CMakeLists.txt` or pass `-std=c++17` to GCC/Clang.
+2. **Use the C API (`bno055_c.h`) for C99 / C++11 / C++14 projects**:
+   If your main application cannot be compiled with C++17, build `libbno055-linux` as a shared library (`libbno055-linux.so`) using a C++17 compiler once, then include `libbno055-linux/bno055_c.h` in your project. The C API provides a pure C99 FFI interface (`bno055_handle_t`) compatible with legacy compilers, C, Python, Rust, and Go.
+
