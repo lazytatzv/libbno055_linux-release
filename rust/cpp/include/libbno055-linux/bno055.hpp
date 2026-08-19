@@ -13,6 +13,16 @@
 
 #include "libbno055-linux/transport.hpp"
 
+#ifndef BNO055_LIKELY
+#if defined(__GNUC__) || defined(__clang__)
+#define BNO055_LIKELY(x)   __builtin_expect(!!(x), 1)
+#define BNO055_UNLIKELY(x) __builtin_expect(!!(x), 0)
+#else
+#define BNO055_LIKELY(x)   (x)
+#define BNO055_UNLIKELY(x) (x)
+#endif
+#endif
+
 namespace bno055lib {
 
 // Log levels for customization
@@ -273,6 +283,11 @@ public:
 
     /// Stop the background async reading thread.
     void stopAsyncReading();
+
+    /// Burst-read ALL sensor outputs in a single 45-byte I2C transaction (registers 0x08–0x34).
+    /// Returns accel, mag, gyro, euler, quaternion, linear_accel, gravity, and temperature atomically.
+    /// 8× fewer I2C transactions compared to reading sensors individually.
+    std::optional<AllData> getAllDataNoexcept() noexcept;
 
     // Asynchronous Raw Reading API
     using RawAsyncDataCallback = std::function<void(const RawSensorData& data)>;

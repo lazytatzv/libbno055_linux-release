@@ -5,6 +5,62 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.9.0] - 2026-07-30
+
+### Added
+- **Stale Data Deduplication Filter in ROS 2**: Added raw 18-byte sequential burst read comparison (`std::memcmp`) to `BNO055PublisherNode` and `BNO055LifecyclePublisherNode`. Eliminates duplicate frame publishing when polling rate exceeds sensor output data rate.
+- **Empirical Hardware Benchmarks in README**: Documented out-of-the-box performance metrics on **RDK X5 (Sunrise RDK)** (82.57 Hz sampling rate, 1.99 ms I/O latency, 0.73 ms stddev jitter).
+
+### Changed
+- **`benchmark_imu` Utility Improvements**: Added support for selecting `NDOF`, `IMUPlus`, or `AMG` modes via command line arguments, and added automatic polling fallback when GPIO interrupt sysfs pin is unavailable.
+
+## [1.8.1] - 2026-07-29
+
+### Fixed
+- **ROS 2 Lifecycle component compilation**: Fixed missing `tf2_ros` and `geometry_msgs` dependency links for `bno055_ros2_lifecycle_components` library in CMakeLists.txt.
+
+## [1.8.0] - 2026-07-29
+
+### Added
+- **`getAllDataNoexcept()` burst read API**: New public method that reads all 8 sensor outputs
+  (accel, mag, gyro, euler, quaternion, linear accel, gravity, temperature) in a **single 45-byte
+  I2C transaction** (registers 0x08–0x34). Reduces I2C transactions by 87.5% vs individual reads.
+- **`startAsyncReading()` optimized**: Background polling loop now uses `getAllDataNoexcept()`
+  (1 burst) instead of 8 separate `get*OrDefault()` calls, dramatically reducing per-cycle latency.
+- **Python async bindings**: Added `start_async_reading`, `stop_async_reading`,
+  `start_raw_async_reading`, `stop_raw_async_reading`, `start_interrupt_driven_reading`,
+  `stop_interrupt_driven_reading`, `set_axis_remap`, `set_axis_sign`, and `get_all_data` to
+  Python. All async callbacks are GIL-safe (`py::gil_scoped_acquire` inside C++ thread lambdas).
+- **Python `AllData`, `AxisMapConfig`, `AxisMapSign`**: New types exposed to Python.
+- **Rust wrapper parity**: Added 10 missing safe wrapper methods to `BNO055` struct:
+  `set_ext_crystal_use`, `get_linear_acceleration`, `get_gravity`, `get_temperature`,
+  `is_fully_calibrated`, `save_calibration_file`, `load_calibration_file`,
+  `enable_auto_calibration`, `disable_auto_calibration`, `enter_suspend_mode`, `enter_normal_mode`.
+- **`rust/cpp/` auto-sync**: CMake `POST_BUILD` command on `libbno055-linux` target automatically
+  syncs all 6 bundled C++ source/header files to `rust/cpp/`, preventing source drift.
+- **libgpiod v2 GPIO IRQ support**: Migrated `startInterruptDrivenReading()` from deprecated
+  `/sys/class/gpio` sysfs interface to modern `libgpiod` v2 character device API. Sysfs fallback
+  retained via `#else` for systems without libgpiod.
+- **CI Arm64 matrix**: Added `ubuntu-24.04-arm` runner to `build-and-test` job for native arm64
+  Python wheel and Rust crate testing.
+- **CI `libgpiod-dev`**: All CI jobs (build, coverage, ROS 2) now install `libgpiod-dev`.
+
+### Fixed
+- **`ACC_CONFIG` overclocking bug**: Corrected register value from `0x0F` (62.5 Hz BW + ±16g,
+  wrong) to `0x1D` (1000 Hz BW + ±4g) in AMG mode. Bit layout documented per datasheet Tables
+  4-3 and 4-4.
+- **Software reset timing**: Post-reset wait corrected from 50 ms to 600 ms pre-poll + 500 ms
+  poll budget, matching the BNO055 datasheet-specified ~650 ms POR boot time (Section 3.4).
+- **`setMode()` transition timing**: Replaced hardcoded 30 ms with datasheet-precise values:
+  19 ms (any mode → CONFIGMODE) and 7 ms (CONFIGMODE → any mode), per Section 3.6.1.
+- **Redundant delays removed**: Eliminated unnecessary extra `sleep_for` calls from
+  `setAxisRemap()`, `setAxisSign()`, and `setExtCrystalUse()`.
+- **Register enum completeness**: Added missing `INT_MSK` (0x0F) and `INT_EN` (0x10) Page 1
+  interrupt configuration registers with full bit-layout documentation.
+- **GYR_CONFIG_0 comment**: Corrected misleading "ODR=2000Hz" to "Range=2000dps, Bandwidth=523Hz".
+- **CI clang-format auto-commit scope**: Restricted to `ubuntu-latest` only to prevent duplicate
+  commits across the now-expanded OS matrix.
+
 ## [1.7.2] - 2026-07-27
 
 ### Fixed
